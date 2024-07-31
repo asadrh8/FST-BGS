@@ -1,5 +1,5 @@
 // 10 deme WF model
-// a 10kb neutral region flanked by 375 selected sites
+// a 10kb neutral region flanked by 350 selected sites
 // input N, t, m, r, mu, reps
 
 
@@ -9,17 +9,17 @@ initialize() {
 	
 	//initialize mutation rates
 	initializeMutationRate(mu);
-	initializeRecombinationRate(c(r, 0, r), c(349, 10348, 10697));
+	initializeRecombinationRate(c(r, 0, r), c(349, 10350, 10699));
 
 	// m1 mutation type: deleterious
-	initializeMutationType("m1", 0.5, "f", -t);
+	initializeMutationType("m1", 0.5, "f", -t*2);
 	
 	// g1 genomic element type: selected sites
 	initializeGenomicElementType("g1", m1, 1);
 	
 	// Create chromosomal region of 350 selected sites flanking a neutral region of 10^4 sites
 	initializeGenomicElement(g1, 0, 349);
-	initializeGenomicElement(g1, 10348, 10697);
+	initializeGenomicElement(g1, 10350, 10699);
 	
 	
 
