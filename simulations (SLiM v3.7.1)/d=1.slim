@@ -1,0 +1,38 @@
+// 1 deme WF model
+// a 10kb neutral region flanked by 350 selected sites
+// input t, N, r, mu, reps
+// directly input s since Ne changes with s
+
+
+initialize() {
+	
+	initializeTreeSeq();
+	
+	//initialize mutation rates
+	initializeMutationRate(mu);
+	initializeRecombinationRate(c(r, 0, r), c(350, 10349, 10699));
+
+	// m1 mutation type: deleterious
+	initializeMutationType("m1", 0.5, "f", -t*2);
+	
+	// g1 genomic element type: selected sites
+	initializeGenomicElementType("g1", m1, 1);
+	
+	// Create chromosomal region of 350 selected sites flanking a neutral region of 10^4 sites
+	initializeGenomicElement(g1, 0, 350 - 1);
+	initializeGenomicElement(g1, 10350, 10700 - 1);
+	
+	
+
+}
+
+1 late() {
+	
+	sim.addSubpop('p1', N);
+
+}
+
+250000 late() {
+	sim.treeSeqOutput(paste0(c(path,
+	'treeSeq_N', N, '_r=', r, '_s=', s, '_µ=', mu, '_', reps, '.trees')));
+}
