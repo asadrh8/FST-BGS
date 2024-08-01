@@ -1,0 +1,1828 @@
+---
+title: "plot_results"
+output: pdf_document
+---
+
+# Note that, in these scripts and data file names, N represents the number of chromosome copies and S represents the heterozygous selection coefficient (S = t). The use of these terms differently from the way they appear in the manuscript is an artifact of modifying the definitions of our parameters for input into the Good et al. (2014) method earlier.
+# Confusingly, N_local however is the number of diploid individuals. This is present in the figures for the maunscript.
+
+# Load in packages and functions
+```{r Packages}
+library(tidyverse)
+library(cowplot)
+source('functions.R')
+```
+
+# m = 0.09, M = 0, d = 10
+
+```{r Read in data and organize to plot FST vs. t}
+
+# Read in m = 0.09, r = 0, d = 10 and name columns
+m0.09_r0 <- read_csv('/Users/asad/drive/desktop/phd_ubc/projects/fst_bgs/10deme/data/pi_FST_mHigh_r=0_25N.csv')
+colnames(m0.09_r0) <- c('t', 'pi_s', 'pi_t', 'FST')
+
+# Summarize data to plot s vs FST and s 
+m0.09_r0_FST <- summarySE(m0.09_r0, measurevar = 'FST', groupvars = 't')
+
+# Good et al.(2014) predicted B  for r = 0, N = 1000, µ = 1e-5
+cgB <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                         B = c(1, 0.9727098377229091, 0.9170606443718708, 0.787082545441483,
+                               0.5360606740450832, 0.5826103893776243, 0.6678210062030913,
+                               0.8027715428502084))
+
+# Good et al. (2014) predicted FST for r = 0, N = 1000, µ = 1e-5
+cgFST <- FST_from_B(cgB$B, N = 1000, m = 0.09, d = 10)
+
+# Zeng & Corcoran (2015) predicted FST for r = 0, N = 1000, µ = 1e-5
+zcFST <- sapply(m0.09_r0_FST$t, calculate_predicted_FST, N = 1000, mu = 1e-5, m = 0.09, r = 0, d = 10, L = 750)
+
+# Mike's B
+mB <- data.frame(NS = c(0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                     B = c(1, 0.9999538648348354, 0.9998269025166147, 0.9993586984105461,
+                           0.9972914513867699, 0.9940722010351537, 0.9914710144432313, 
+                           0.9862484179055861))
+
+mFST <- FST_from_B(mB$B, N = 1000, m = 0.09, d = 10)
+
+# Updated B using Buffalo and Kern model with migration effect
+bkB <- data.frame(B_rescaled_py_m = c(1, 0.9931615385011023, 0.9929350271400335, 0.9917143449389648,
+                                      0.9895852357192843, 0.986558912952732, 0.9840709194258793,
+                                      0.9789042990881073))
+
+bkFST <- FST_from_B(bkB$B_rescaled_py_m, N = 1000, m = 0.09, d = 10)
+
+
+m0.09_r0_FST <- m0.09_r0_FST %>%
+  mutate(zcFST = zcFST) %>%
+  mutate(cgFST = cgFST) %>%
+  mutate(mFST = mFST) %>%
+  mutate(bkFST = bkFST)
+
+m0.09_r0_FST
+```
+
+```{r Plot FST vs. t for m = 0.09, M = 0, d = 10}
+
+cg_FST_mHigh_plot <- ggplot(data = m0.09_r0_FST, aes(x = 500*t, y = FST)) + 
+  geom_point(aes(size = 1, color = 'Simulations')) + # Observed FST
+  geom_line(aes(x = 500*t, y = FST, size = 0.5, color = 'Simulations')) + # Observed FST
+  geom_errorbar(aes(ymin = FST-ci, ymax = FST+ci, color = 'Simulations')) + # Observed FST 95%CIs
+  geom_point(aes(x = 500*t, y = zcFST, size = 1, color = 'B from Nordborg et al. (1996)')) + # Nordborg et al. (1996) FST
+  geom_point(aes(y = cgFST, size = 1, color = 'B from Good et al. (2014)')) + # Good et al. (2014) FST
+  geom_point(aes(y = mFST, size = 1, color = "B from Good et al. (2014) with migration effect")) + # Mike B
+  # geom_point(aes(y = bkFST, size = 1, color = 'B from Buffalo and Kern (2024)')) + 
+  theme_minimal() + xlab(expression(N[local]*t)) + ylab(expression(F[ST])) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title=element_text(size = 15),
+        axis.line = element_line(colour = 'black'),
+        legend.position = c(0.3, 0.85),
+        legend.text.align = 0,
+        legend.text = element_text(size = 10),
+        legend.title = element_blank(),
+        plot.title = element_text(size = 15)) + 
+  guides(size = "none") + 
+  scale_color_manual(values = c('#35b779','#fde725', '#440154', 'grey'),
+                     labels = c('B using Eq. ST3', 'B using Eq. ST4', 'Classic B', 'Simulations')) + 
+  # scale_color_manual(values = c('pink', '#440154', 'grey'),
+   #                  labels = c(expression(B[local] ~ 'from Eq. 2'), 'Classic B (Eq. 7)',
+  #                              'Simulations')) + 
+  ylim(0, 0.03) + 
+  ggtitle(expression(N[local]*m ~ '= 45, M = 0'))
+  
+
+nb_FST_plot <- ggplot(data = m0.09_r0_FST, aes(x = 500*t, y = FST)) + 
+  geom_point(aes(color = 'Simulations')) + # Observed FST
+  geom_line(aes(x = 500*t, y = FST, color = 'Simulations')) + # Observed FST
+  geom_errorbar(aes(ymin = FST-ci, ymax = FST+ci, color = 'Simulations')) + # Observed FST 95%CIs
+  geom_point(aes(y = zcFST, color = 'Nordborg et al. (1996)')) + # Nordborg et al. (1996) B
+  #geom_point(aes(x = 1000*s, y = cgFST, size = 1), color = '#E69F00') + # Good et al. (2014) B
+  theme_minimal() + theme(panel.grid.major = element_blank(),
+                          panel.grid.minor = element_blank(),
+                          axis.line = element_line(colour = 'black'),
+                          legend.title = element_blank(),
+                          legend.position = "none") + 
+  scale_color_manual(values = c('#440154', '#999999')) + 
+  xlab(expression(N[local]*t)) + ylab(expression(F[ST]))
+
+plot_mHigh <- ggdraw() +
+draw_plot(cg_FST_mHigh_plot, width = 1) +
+draw_plot(nb_FST_plot, x = 0.6, y = .6, width = .3, height = .3)
+
+plot_mHigh
+```
+
+
+```{r Read in pi_s and pi_t data and organize to plot pi_t, pi_s vs t for m = 0.09, M = 0, d = 10}
+
+
+mB_local <- data.frame(NS = c(0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                     B = c(1, 0.9999538648348354, 0.9998269025166147, 0.9993586984105461,
+                           0.9972914513867699, 0.9940722010351537, 0.9914710144432313, 
+                           0.9862484179055861))
+
+cgB_local <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                         B = c(1, 0.9727098377229091, 0.9170606443718708, 0.787082545441483,
+                               0.5360606740450832, 0.5826103893776243, 0.6678210062030913,
+                               0.8027715428502084))
+
+# Updated B using Buffalo and Kern model with migration effect
+bkB_local <- data.frame(B_rescaled_py_m = c(1, 0.9931615385011023, 0.9929350271400335, 0.9917143449389648,
+                                      0.9895852357192843, 0.986558912952732, 0.9840709194258793,
+                                      0.9789042990881073))
+
+# Calculate FST using total diversity
+m_FST_t <- FST_from_B(mB_local$B, N = 1000, m = 0.09, d = 10, b = FALSE)
+cg_FST_t <- FST_from_B(cgB_local$B, N = 1000, m = 0.09, d = 10, b = FALSE)
+bk_FST_t <- FST_from_B(bkB$B_rescaled_py_m, N = 1000, m = 0.09, d = 10, b = FALSE)
+
+# Summarize data to plot pi_t vs. s
+m0.09_r0_pi_t <- summarySE(m0.09_r0, measurevar = 'pi_t', groupvars = 't') %>%
+  mutate(m_FST_t = m_FST_t) %>%
+  mutate(global_Ne_m = 5000 / (1 - m_FST_t)) %>%
+  mutate(global_Ne_cg = 5000 / (1 - cg_FST_t)) %>%
+  mutate(global_Ne_bk = 5000 / (1 - bk_FST_t))
+
+# Define variables to calculate predicted pi_t and then calculate predicted pi_t
+mB_global <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                  B = c(1, 0.5766361156815807, 0.31504459550347585, 0.1525292247482456,
+                        0.27543375514537977, 0.5051552465674819, 0.6311468578303419, 0.7929736444911377))
+
+cgB_global <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                  B = c(1, 0.295, 0.204, 0.151, 0.275, 0.505, 0.631, 0.793))
+
+# Updated B using Buffalo and Kern model with migration effect
+bkB_global <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                  B = c(1, 0.7634193179022586, 0.7036431436622349, 0.38897658164304805, 
+                        0.3352963575862341, 0.5039962472020599, 0.607508466739341,
+                        0.7298762542858979))
+
+# Calculate predicted pi_t
+mu = 1e-5
+
+global_Ne_m = m0.09_r0_pi_t$global_Ne_m
+predicted_pi_t_m <- (4 * global_Ne_m * mu * mB_global$B) / (1 + 4 * global_Ne_m * mu * mB_global$B)
+
+global_Ne_cg = m0.09_r0_pi_t$global_Ne_cg
+predicted_pi_t_cg <- (4 * global_Ne_cg * mu * cgB_global$B) / (1 + 4 * global_Ne_cg * mu * cgB_global$B)
+
+global_Ne_bk = m0.09_r0_pi_t$global_Ne_bk
+predicted_pi_t_bk <- (4 * global_Ne_bk * mu * bkB_global$B) / (1 + 4 * global_Ne_bk * mu * bkB_global$B)
+
+m0.09_r0_pi_t <- m0.09_r0_pi_t %>%
+  mutate(predicted_pi_t_m = predicted_pi_t_m) %>%
+  mutate(predicted_pi_t_cg = predicted_pi_t_cg) %>%
+  mutate(predicted_pi_t_bk = predicted_pi_t_bk)
+
+# Read in pi_s data and calculate predicted pi_s
+m0.09_r0_pi_s <- summarySE(m0.09_r0, measurevar = 'pi_s', groupvars = 't')
+predicted_pi_s_m <- predicted_pi_t_m * (1 - m_FST_t)
+predicted_pi_s_cg <- predicted_pi_t_cg * (1 - cg_FST_t)
+predicted_pi_s_bk <- predicted_pi_t_bk * (1 - bk_FST_t)
+
+m0.09_r0_pi_s <- m0.09_r0_pi_s %>%
+  mutate(predicted_pi_s_m = predicted_pi_s_m) %>%
+  mutate(predicted_pi_s_cg = predicted_pi_s_cg) %>%
+  mutate(predicted_pi_s_bk = predicted_pi_s_bk)
+
+# Output dataframes
+m0.09_r0_pi_t
+m0.09_r0_pi_s
+```
+
+
+```{r Plot pi_t vs t for m = 0.09, M = 0, d = 10}
+
+m0.09_pi_t_plot <- ggplot(data = m0.09_r0_pi_t, aes(x = 5000*t, y = pi_t)) + 
+  geom_point(aes(size = 1, color = 'Observed')) + 
+  geom_line(aes(x = 5000*t, size = 0.5, y = pi_t, color = 'Observed')) + 
+  geom_errorbar(aes(ymin = pi_t-ci, ymax = pi_t+ci, color = 'Observed')) +
+  geom_point(aes(x = 5000*t, y = predicted_pi_t_m, size = 1, color = 'Predicted')) +
+  #geom_point(aes(x = 5000*t, y = predicted_pi_t_bk, size = 1, color = 'Predicted')) + 
+  theme_minimal() + xlab(expression(N[global]*t)) + ylab(expression(pi[t])) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title = element_text(size = 15),
+        legend.title = element_blank(),
+        axis.line = element_line(colour = 'black'),
+        legend.position = c(0.5, 0.9),
+        legend.text = element_text(size = 10),
+        plot.title = element_text(size = 15)) + 
+  scale_colour_manual(values = c('#999999', '#fde725')) + 
+  #scale_colour_manual(values = c('#999999', 'pink')) + 
+  guides(size = "none") + 
+  ylim(0, 0.20) + 
+  ggtitle(expression(N[global]*m ~ '= 45, M = 0'))
+
+m0.09_pi_s_plot <- ggplot(data = m0.09_r0_pi_s, aes(x = 5000*t, y = pi_s)) + 
+  geom_point(aes(size = 1, color = 'Observed')) + 
+  geom_line(aes(x = 5000*t, size = 0.5, y = pi_s, color = 'Observed')) + 
+  geom_errorbar(aes(ymin = pi_s-ci, ymax = pi_s+ci, color = 'Observed')) +
+  geom_point(aes(x = 5000*t, y = predicted_pi_s_m, size = 1, color = 'Predicted')) +
+  #geom_point(aes(x = 5000*t, y = predicted_pi_s_bk, size = 1, color = 'Predicted')) + 
+  theme_minimal() + xlab(expression(N[global]*t)) + ylab(expression(pi[s])) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title = element_text(size = 15),
+        legend.title = element_blank(),
+        axis.line = element_line(colour = 'black'),
+        legend.position = c(0.5, 0.9),
+        legend.text = element_text(size = 10),
+        plot.title = element_text(size = 15)) + 
+  scale_colour_manual(values = c('#999999', '#fde725')) + 
+  #scale_colour_manual(values = c('#999999', 'pink')) + 
+  guides(size = "none") +   ggtitle(expression(N[local]*m ~ '= 45, M = 0'))
+
+m0.09_pi_t_plot
+m0.09_pi_s_plot
+```
+# m = 0.009, M = 0, d = 10
+```{r Read in data and organize to plot FST vs. t}
+
+# Read in m = 0.009, r = 0, d = 10 and name columns
+m0.009_r0 <- read_csv('/Users/asad/drive/desktop/phd_ubc/projects/fst_bgs/10deme/data/pi_FST_mInt_r=0_25N.csv')
+colnames(m0.009_r0) <- c('t', 'pi_s', 'pi_t', 'FST')
+
+# Summarize data to plot s vs FST and s 
+m0.009_r0_FST <- summarySE(m0.009_r0, measurevar = 'FST', groupvars = 't')
+
+# Good et al.(2014) predicted B  for r = 0, N = 1000, µ = 1e-5
+cgB <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                         B = c(1, 0.9727098377229091, 0.9170606443718708, 0.787082545441483,
+                               0.5360606740450832, 0.5826103893776243, 0.6678210062030913, 0.8027715428502084))
+
+# Good et al. (2014) predicted FST for r = 0, N = 1000, µ = 1e-5
+cgFST <- FST_from_B(cgB$B, N = 1000, m = 0.009, d = 10)
+
+# Zeng & Corcoran (2015) predicted FST for r = 0, N = 1000, µ = 1e-5
+zcFST <- sapply(m0.009_r0_FST$t, calculate_predicted_FST, N = 1000, mu = 1e-5, m = 0.009, r = 0, d = 10, L = 750)
+
+# Mike's B with Good et al. (2014) method
+mB <- data.frame(NS = c(0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                     B = c(1, 0.9975933309415884, 0.9912566738633872, 0.9695667360269816,
+                           0.8872407706208271, 0.8511797865015461, 0.8506174230886494, 0.8776623449424189))
+
+mFST <- FST_from_B(mB$B, N = 1000, m = 0.009, d = 10)
+
+# Updated B using Buffalo and Kern model with migration effect
+bkB <- data.frame(B_rescaled_py_m = c(1, 0.985603156760174, 0.9730622325012283, 0.9020889481999783,
+                                      0.8525901599521456, 0.8363084204152008, 0.8416243993287992,
+                                      0.8721653200449864))
+
+bkFST <- FST_from_B(bkB$B_rescaled_py_m, N = 1000, m = 0.009, d = 10)
+
+m0.009_r0_FST <- m0.009_r0_FST %>%
+  mutate(zcFST = zcFST) %>%
+  mutate(cgFST = cgFST) %>%
+  mutate(mFST = mFST) %>%
+  mutate(bkFST = bkFST)
+
+m0.009_r0_FST
+```
+
+```{r Plot FST vs. t for m = 0.009, M = 0, d = 10}
+
+cg_FST_mInt_plot <- ggplot(data = m0.009_r0_FST, aes(x = 500*t, y = FST)) + 
+  geom_point(aes(size = 1, color = 'Simulations')) + # Observed FST
+  geom_line(aes(x = 500*t, y = FST, size = 0.5, color = 'Simulations')) + # Observed FST
+  geom_errorbar(aes(ymin = FST-ci, ymax = FST+ci, color = 'Simulations')) + # Observed FST 95%CIs
+  geom_point(aes(x = 500*t, y = zcFST, size = 1, color = 'B from Nordborg ')) + # Nordborg et al. (1996) FST
+  geom_point(aes(y = cgFST, size = 1, color = 'B from Good et al. (2014)')) + # Good et al. (2014) FST
+  geom_point(aes(y = mFST, size = 1, color = "B from Good et al. (2014) with migration effect")) + # Mike B
+  #geom_point(aes(y = bkFST, size = 1, color = 'B from Eq. 2 & 3')) +
+  theme_minimal() + xlab(expression(N[local]*t)) + ylab(expression(F[ST])) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title = element_text(size = 15),
+        axis.line = element_line(colour = 'black'),
+        legend.position = 'none',
+        legend.title = element_blank(),
+        legend.text = element_text(size = 10),
+        plot.title = element_text(size = 15)) + 
+  ylim(0.045, 0.08) + 
+  scale_color_manual(values = c('#35b779','#fde725', '#440154', 'grey'),
+                     labels = c('B using Eq. ST3)', 'B using Eq. ST4', 'classic B', 'Simulations')) + 
+  #scale_color_manual(values = c('pink', '#440154', 'grey')) + 
+  guides(size = "none") + 
+  ggtitle(expression(N[local]*m ~ '= 4.5, M = 0'))
+  
+
+nb_FST_plot <- ggplot(data = m0.009_r0_FST, aes(x = 500*t, y = FST)) + 
+  geom_point(aes(color = 'Simulations')) + 
+  geom_line(aes(x = 500*t, y = FST, color = 'Simulations')) + # Observed FST
+  geom_errorbar(aes(ymin = FST-ci, ymax = FST+ci, color = 'Simulations')) + # Observed FST 95%CIs
+  geom_point(aes(y = zcFST, color = 'B from Nordborg et al. (1996)')) + # Nordborg et al. (1996) B
+  #geom_point(aes(x = 1000*s, y = cgFST, size = 1), color = '#E69F00') + # Good et al. (2014) B
+  theme_minimal() + theme(panel.grid.major = element_blank(),
+                          panel.grid.minor = element_blank(),
+                          axis.line = element_line(colour = 'black'),
+                          legend.title = element_blank(),
+                          legend.position = "none") + 
+  scale_color_manual(values = c('#440154', '#999999')) + 
+  xlab(expression(N[local]*t)) + ylab(expression(F[ST]))
+
+plot_mInt <- ggdraw() +
+draw_plot(cg_FST_mInt_plot, width = 1) +
+draw_plot(nb_FST_plot, x = 0.6, y = .6, width = .3, height = .3)
+
+plot_mInt
+```
+```{r Read in pi_s and pi_t data and organize to plot pi_t, pi_s vs t for m = 0.009, M = 0, d = 10}
+
+# Good et al.(2014) predicted B  for r = 0, N = 1000, µ = 1e-5
+mB_local <- data.frame(NS = c(0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                     B = c(1, 0.9975933309415884, 0.9912566738633872, 0.9695667360269816,
+                           0.8872407706208271, 0.8511797865015461, 0.8506174230886494, 0.8776623449424189))
+
+cgB_local <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                         B = c(1, 0.9727098377229091, 0.9170606443718708, 0.787082545441483,
+                               0.5360606740450832, 0.5826103893776243, 0.6678210062030913, 0.8027715428502084))
+
+# Updated B using Buffalo and Kern model with migration effect
+bkB_local <- data.frame(B_rescaled_py_m = c(1, 0.985603156760174, 0.9730622325012283, 0.9020889481999783,
+                                      0.8525901599521456, 0.8363084204152008, 0.8416243993287992,
+                                      0.8721653200449864))
+
+# Calculate FST using total diversity
+m_FST_t <- FST_from_B(mB_local$B, N = 1000, m = 0.009, d = 10, b = FALSE)
+cg_FST_t <- FST_from_B(cgB_local$B, N = 1000, m = 0.009, d = 10, b = FALSE)
+bk_FST_t <- FST_from_B(bkB$B_rescaled_py_m, N = 1000, m = 0.009, d = 10, b = FALSE)
+
+# Summarize data to plot pi_t vs. s
+m0.009_r0_pi_t <- summarySE(m0.009_r0, measurevar = 'pi_t', groupvars = 't') %>%
+  mutate(m_FST_t = m_FST_t) %>%
+  mutate(global_Ne_m = 5000 / (1 - m_FST_t)) %>%
+  mutate(global_Ne_cg = 5000 / (1 - cg_FST_t)) %>%
+  mutate(global_Ne_bk = 5000 / (1 - bk_FST_t))
+
+# Define variables to calculate predicted pi_t and then calculate predicted pi_t
+mB_global <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                  B = c(1,0.5678562897917789, 0.3054589788160375, 0.14707867732633922, 0.274170188375163,
+                        0.5047625932958025, 0.6309609408747704, 0.7929255503917537))
+
+cgB_global <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                  B = c(1, 0.295, 0.204, 0.151, 0.275, 0.505, 0.631, 0.793))
+
+bkB_global <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                  B = c(1, 0.7617214737392966, 0.7009741297807763, 0.38497924988841065,
+                        0.331330696807094, 0.5031562301985957, 0.6071917924749579,
+                        0.729814844169211))
+
+# Calculate predicted pi_t
+mu = 1e-5
+
+global_Ne_m = m0.009_r0_pi_t$global_Ne_m
+predicted_pi_t_m <- (4 * global_Ne_m * mu * mB_global$B) / (1 + 4 * global_Ne_m * mu * mB_global$B)
+
+global_Ne_cg = m0.009_r0_pi_t$global_Ne_cg
+predicted_pi_t_cg <- (4 * global_Ne_cg * mu * cgB_global$B) / (1 + 4 * global_Ne_cg * mu * cgB_global$B)
+
+global_Ne_bk = m0.009_r0_pi_t$global_Ne_bk
+predicted_pi_t_bk <- (4 * global_Ne_bk * mu * bkB_global$B) / (1 + 4 * global_Ne_bk * mu * bkB_global$B)
+
+m0.009_r0_pi_t <- m0.009_r0_pi_t %>%
+  mutate(predicted_pi_t_m = predicted_pi_t_m) %>%
+  mutate(predicted_pi_t_cg = predicted_pi_t_cg) %>%
+  mutate(predicted_pi_t_bk = predicted_pi_t_bk)
+
+# Read in pi_s data and calculate predicted pi_s
+m0.009_r0_pi_s <- summarySE(m0.009_r0, measurevar = 'pi_s', groupvars = 't')
+predicted_pi_s_m <- predicted_pi_t_m * (1 - m_FST_t)
+predicted_pi_s_cg <- predicted_pi_t_cg * (1 - cg_FST_t)
+predicted_pi_s_bk <- predicted_pi_t_bk * (1 - bk_FST_t)
+
+m0.009_r0_pi_s <- m0.009_r0_pi_s %>%
+  mutate(predicted_pi_s_m = predicted_pi_s_m) %>%
+  mutate(predicted_pi_s_cg = predicted_pi_s_cg) %>%
+  mutate(predicted_pi_s_bk = predicted_pi_s_bk)
+
+# Output dataframes
+m0.009_r0_pi_t
+m0.009_r0_pi_s
+```
+
+```{r Plot pi_t vs s for m = 0.009, M = 0, d = 10}
+
+m0.009_pi_t_plot <- ggplot(data = m0.009_r0_pi_t, aes(x = 5000*t, y = pi_t)) + 
+  geom_point(aes(size = 1, color = 'Observed')) + 
+  geom_line(aes(x = 5000*t, size = 0.5, y = pi_t, color = 'Observed')) + 
+  geom_errorbar(aes(ymin = pi_t-ci, ymax = pi_t+ci, color = 'Observed')) +
+  geom_point(aes(x = 5000*t, y = predicted_pi_t_m, size = 1, color = 'Predicted')) +
+  #geom_point(aes(x = 5000*t, y = predicted_pi_t_bk, size = 1, color = 'Predicted')) + 
+  theme_minimal() + xlab(expression(N[global]*t)) + ylab(expression(pi[t])) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title = element_text(size = 15),
+        legend.title = element_blank(),
+        axis.line = element_line(colour = 'black'),
+        legend.position = 'none',
+        legend.text = element_text(size = 10),
+        plot.title = element_text(size = 15)) + 
+  scale_colour_manual(values = c('#999999', '#fde725')) + 
+  #scale_colour_manual(values = c('#999999', 'pink')) + 
+  guides(size = "none") + 
+  ylim(0, 0.20) + 
+  ggtitle(expression(N[global]*m ~ '= 4.5, M = 0'))
+
+m0.009_pi_s_plot <- ggplot(data = m0.009_r0_pi_s, aes(x = 5000*t, y = pi_s)) + 
+  geom_point(aes(size = 1, color = 'Observed')) + 
+  geom_line(aes(x = 5000*t, size = 0.5, y = pi_s, color = 'Observed')) + 
+  geom_errorbar(aes(ymin = pi_s-ci, ymax = pi_s+ci, color = 'Observed')) +
+  geom_point(aes(x = 5000*t, y = predicted_pi_s_m, size = 1, color = 'Predicted')) +
+  #geom_point(aes(x = 5000*t, y = predicted_pi_s_bk, size = 1, color = 'Predicted')) + 
+  theme_minimal() + xlab(expression(N[global]*t)) + ylab(expression(pi[s])) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title = element_text(size = 15),
+        legend.title = element_blank(),
+        axis.line = element_line(colour = 'black'),
+        legend.position = 'none',
+        legend.text = element_text(size = 10),
+        plot.title = element_text(size = 15)) + 
+  scale_colour_manual(values = c('#999999', '#fde725')) + 
+  #scale_colour_manual(values = c('#999999', 'pink')) + 
+  guides(size = "none") +   ggtitle(expression(N[local]*m ~ '= 4.5, M = 0'))
+
+m0.009_pi_t_plot
+m0.009_pi_s_plot
+```
+# m = 0.00045, M = 0, d = 10
+
+```{r Read in data and organize to plot FST vs. t}
+
+# Read in m = 0.00045, r = 0, d = 10 and name columns
+m0.00045_r0 <- read_csv('/Users/asad/drive/desktop/phd_ubc/projects/fst_bgs/10deme/data/pi_FST_mLow_r=0_25N.csv')
+colnames(m0.00045_r0) <- c('t', 'pi_s', 'pi_t', 'FST')
+
+# Summarize data to plot s vs FST and s 
+m0.00045_r0_FST <- summarySE(m0.00045_r0, measurevar = 'FST', groupvars = 't')
+
+# Good et al.(2014) predicted B  for r = 0, N = 1000, µ = 1e-5
+cgB <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                         B = c(1, 0.9727098377229091, 0.9170606443718708, 0.787082545441483,
+                               0.5360606740450832, 0.5826103893776243, 0.6678210062030913, 
+                               0.8027715428502084))
+
+# Good et al. (2014) predicted FST for r = 0, N = 1000, µ = 1e-5
+cgFST <- FST_from_B(cgB$B, N = 1000, m = 0.00045, d = 10)
+
+# Zeng & Corcoran (2015) predicted FST for r = 0, N = 1000, µ = 1e-5
+zcFST <- sapply(m0.00045_r0_FST$t, calculate_predicted_FST, N = 1000, mu = 1e-5, m = 0.00045, r = 0, d = 10, L = 750)
+
+# Mike's B
+mB <- data.frame(NS = c(0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                     B = c(1, 0.9783335668047128, 0.9317444099206262, 0.8150488205800788,
+                           0.5644607374986734, 0.6067835486836118, 0.6827962636280012,
+                           0.8079129382484328))
+
+mFST <- FST_from_B(mB$B, N = 1000, m = 0.00045, d = 10)
+
+# Updated B using Buffalo and Kern model with migration effect
+bkB <- data.frame(B_rescaled_py_m = c(1, 0.900613876400979, 0.835203361186095, 0.8494949951497219,
+                                      0.585305205309686,0.6284465609171209, 0.6917507349516898, 
+                                      0.8076656208580147))
+
+bkFST <- FST_from_B(bkB$B_rescaled_py_m, N = 1000, m = 0.00045, d = 10)
+
+m0.00045_r0_FST <- m0.00045_r0_FST %>%
+  mutate(zcFST = zcFST) %>%
+  mutate(cgFST = cgFST) %>%
+  mutate(mFST = mFST) %>%
+  mutate(bkFST = bkFST)
+
+m0.00045_r0_FST
+```
+
+```{r Plot FST vs. t for m = 0.00045, M = 0, d = 10}
+
+cg_FST_mLow_plot <- ggplot(data = m0.00045_r0_FST, aes(x = 500*t, y = FST)) + 
+  geom_point(aes(size = 1, color = 'Simulations')) + 
+  geom_line(aes(x = 500*t, y = FST, size = 0.5, color = 'Simulations')) + # Observed FST
+  geom_errorbar(aes(ymin = FST-ci, ymax = FST+ci, color = 'Simulations')) + # Observed FST 95%CIs
+  geom_point(aes(x = 500*t, y = zcFST, size = 1, color = 'B from Nordborg et al. (1996)')) + # Nordborg et al. (1996) FST
+  geom_point(aes(y = cgFST, size = 1, color = 'B from Good et al. (2014)')) + # Good et al. (2014) FST
+  geom_point(aes(y = mFST, size = 1, color = "B from Good et al. (2014) with migration effect")) + # Mike B
+  #geom_point(aes(y = bkFST, size = 1, color = "B Buffalo and Kern (2024")) + 
+  theme_minimal() + xlab(expression(N[local]*t)) + ylab(expression(F[ST])) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title=element_text(size = 15),
+        axis.line = element_line(colour = 'black'),
+        legend.position = 'none',
+        legend.title = element_blank(),
+        plot.title = element_text(size = 15)) + 
+  scale_color_manual(values = c('#35b779','#fde725', '#440154', 'grey'),
+                     labels = c('B using Eq. ST3)', 'B using Eq. ST4', 'classic B', 'Simulations')) + 
+  #scale_color_manual(values = c('pink','#440154','grey')) + 
+  guides(size = "none") + ylim(0.48, 0.7) + 
+  ggtitle(expression(N[local]*m ~ '= 0.225, M = 0'))
+  
+
+nb_FST_plot <- ggplot(data = m0.00045_r0_FST, aes(x = 500*t, y = FST)) + 
+  geom_point(aes(color = 'Simulations')) + 
+  geom_line(aes(x = 500*t, y = FST, color = 'Simulations')) + # Observed FST
+  geom_errorbar(aes(ymin = FST-ci, ymax = FST+ci, color = 'Simulations')) + # Observed FST 95%CIs
+  geom_point(aes(y = zcFST, color = 'B from Nordborg et al. (1996)')) + # Nordborg et al. (1996) B
+  #geom_point(aes(x = 1000*s, y = cgFST, size = 1), color = '#E69F00') + # Good et al. (2014) B
+  theme_minimal() + theme(panel.grid.major = element_blank(),
+                          panel.grid.minor = element_blank(),
+                          axis.line = element_line(colour = 'black'),
+                          legend.title = element_blank(),
+                          legend.position = "none") + 
+  scale_color_manual(values = c('#440154', '#999999')) + 
+  xlab(expression(N[local]*t)) + ylab(expression(F[ST]))
+
+plot_mLow <- ggdraw() +
+draw_plot(cg_FST_mLow_plot) +
+draw_plot(nb_FST_plot, x = 0.6, y = .6, width = .3, height = .3)
+
+plot_mLow
+```
+
+```{r Read in pi_s and pi_t data and organize to plot pi_t, pi_s vs t for m = 0.00045, M = 0, d = 10}
+
+# Mike's B
+mB <- data.frame(NS = c(0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                     B = c(1, 0.9783335668047128, 0.9317444099206262, 0.8150488205800788,
+                           0.5644607374986734, 0.6067835486836118, 0.6827962636280012,
+                           0.8079129382484328))
+
+cgB <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                         B = c(1, 0.9727098377229091, 0.9170606443718708, 0.787082545441483,
+                               0.5360606740450832, 0.5826103893776243, 0.6678210062030913, 
+                               0.8027715428502084))
+
+# Updated B using Buffalo and Kern model with migration effect
+bkB <- data.frame(B_rescaled_py_m = c(1, 0.900613876400979, 0.835203361186095, 0.8494949951497219,
+                                      0.585305205309686,0.6284465609171209, 0.6917507349516898, 
+                                      0.8076656208580147))
+
+# Calculate FST using total diversity
+m_FST_t <- FST_from_B(mB$B, N = 1000, m = 0.00045, d = 10, b = FALSE)
+cg_FST_t <- FST_from_B(cgB$B, N = 1000, m = 0.00045, d = 10, b = FALSE)
+bk_FST_t <- FST_from_B(bkB$B_rescaled_py_m, N = 1000, m = 0.00045, d = 10, b = FALSE)
+
+# Summarize data to plot pi_t vs. s
+m0.00045_r0_pi_t <- summarySE(m0.00045_r0, measurevar = 'pi_t', groupvars = 't') %>%
+  mutate(m_FST_t = m_FST_t) %>%
+  mutate(global_Ne_m = 5000 / (1 - m_FST_t)) %>%
+  mutate(global_Ne_cg = 5000 / (1 - cg_FST_t)) %>%
+  mutate(global_Ne_bk = 5000 / (1 - bk_FST_t))
+
+# Define variables to calculate predicted pi_t and then calculate predicted pi_t
+mB_global <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                  B = c(1, 0.4405536368856925, 0.1796385461471528, 0.08795259546052198, 
+                        0.2577593775658343, 0.5000512621147865, 0.6288470447434936, 0.7924045675915581))
+
+cgB_global <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                  B = c(1, 0.173, 0.113, 0.084, 0.257, 0.500, 0.629, 0.792))
+
+bkB_global <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                  B = c(1, 0.7349254759730115, 0.39908548184917725, 0.3280567696744019, 0.2870807677331028, 0.4945612579137865, 0.6039952597367771, 0.7291698157177148))
+
+# Calculate predicted pi_t
+mu = 1e-5
+
+global_Ne_m = m0.00045_r0_pi_t$global_Ne_m
+predicted_pi_t_m <- (4 * global_Ne_m * mu * mB_global$B) / (1 + 4 * global_Ne_m * mu * mB_global$B)
+
+global_Ne_cg = m0.00045_r0_pi_t$global_Ne_cg
+predicted_pi_t_cg <- (4 * global_Ne_cg * mu * cgB_global$B) / (1 + 4 * global_Ne_cg * mu * cgB_global$B)
+
+global_Ne_bk = m0.00045_r0_pi_t$global_Ne_bk
+predicted_pi_t_bk <- (4 * global_Ne_bk * mu * bkB_global$B) / (1 + 4 * global_Ne_bk * mu * bkB_global$B)
+
+m0.00045_r0_pi_t <- m0.00045_r0_pi_t %>%
+  mutate(predicted_pi_t_m = predicted_pi_t_m) %>%
+  mutate(predicted_pi_t_cg = predicted_pi_t_cg) %>%
+  mutate(predicted_pi_t_bk = predicted_pi_t_bk)
+
+# Read in pi_s data and calculate predicted pi_s
+m0.00045_r0_pi_s <- summarySE(m0.00045_r0, measurevar = 'pi_s', groupvars = 't')
+predicted_pi_s_m <- predicted_pi_t_m * (1 - m_FST_t)
+predicted_pi_s_cg <- predicted_pi_t_cg * (1 - cg_FST_t)
+predicted_pi_s_bk <- predicted_pi_t_bk * (1 - bk_FST_t)
+
+m0.00045_r0_pi_s <- m0.00045_r0_pi_s %>%
+  mutate(predicted_pi_s_m = predicted_pi_s_m) %>%
+  mutate(predicted_pi_s_cg = predicted_pi_s_cg) %>%
+  mutate(predicted_pi_s_bk = predicted_pi_s_bk)
+
+m0.00045_r0_pi_t
+m0.00045_r0_pi_s
+```
+
+```{r Plot pi_t, pi_s vs t for m = 0.00045, M = 0, d = 10}
+
+m0.00045_pi_t_plot <- ggplot(data = m0.00045_r0_pi_t, aes(x = 5000*t, y = pi_t)) + 
+  geom_point(aes(size = 1, color = 'Observed')) + 
+  geom_line(aes(x = 5000*t, y = pi_t, size = 0.5, color = 'Observed')) + 
+  geom_errorbar(aes(ymin = pi_t-ci, ymax = pi_t+ci, color = 'Observed')) +
+  geom_point(aes(x = 5000*t, y = predicted_pi_t_m, size = 1, color = 'predicted')) + 
+  #geom_point(aes(x = 5000*t, y = predicted_pi_t_bk, size = 1, color = 'Predicted')) + 
+  theme_minimal() + xlab(expression(N[global]*t)) + ylab(expression(pi[t])) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title=element_text(size = 15),
+        axis.line = element_line(colour = 'black'),
+        legend.title = element_blank(),
+        legend.position = 'none',
+        plot.title = element_text(size = 15)) + 
+  scale_colour_manual(values = c('#999999', '#fde725')) + 
+  #scale_colour_manual(values = c('#999999', 'pink')) + 
+  guides(size = "none") + 
+  ylim(0, 0.3) + ggtitle(expression(N[global]*m ~ '= 0.225, M = 0'))
+
+m0.00045_pi_s_plot <- ggplot(data = m0.00045_r0_pi_s, aes(x = 5000*t, y = pi_s)) + 
+  geom_point(aes(size = 1, color = 'observed')) + 
+  geom_line(aes(x = 5000*t, y = pi_s, size = 0.5, color = 'observed')) + 
+  #geom_errorbar(aes(ymin = pi_s-ci, ymax = pi_s+ci, color = 'observed')) +
+  geom_point(aes(x = 5000*t, y = predicted_pi_s_m, size = 1, color = 'predicted')) + 
+  #geom_point(aes(x = 5000*t, y = predicted_pi_s_bk, size = 1, color = 'predicted')) + 
+  theme_minimal() + xlab(expression(N[global]*t)) + ylab(expression(pi[s])) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title=element_text(size = 15),
+        axis.line = element_line(colour = 'black'),
+        legend.title = element_blank(),
+        legend.position = 'none',
+        plot.title = element_text(size = 15)) + 
+  scale_colour_manual(values = c('#999999', '#fde725')) + 
+  #scale_colour_manual(values = c('#999999', 'pink')) + 
+  guides(size = "none") + ggtitle(expression(N[local]*m ~ '= 0.225, M = 0'))
+
+m0.00045_pi_t_plot
+m0.00045_pi_s_plot
+
+```
+
+# m = 0.09, M = 0.01, d = 10
+
+```{r Read in data and organize to plot FST vs. t}
+# Read in m = 0.01, r = 0, d = 10 and name columns
+m0.09_cM1 <- read_csv('/Users/asad/drive/desktop/phd_ubc/projects/fst_bgs/10deme/data/pi_FST_mHigh_cM=1_25N.csv')
+colnames(m0.09_cM1) <- c('t', 'r', 'pi_s', 'pi_t', 'FST')
+
+# Summarize data to plot s vs FST and s 
+m0.09_cM1_FST <- summarySE(m0.09_cM1, measurevar = 'FST', groupvars = 't')
+
+# Good et al.(2014) predicted B  for r = 1.41e-05, N = 1000, µ = 1e-5
+cgB <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                         B = c(1, 0.9775004474560725, 0.9325401616445476, 0.8323984524252939, 
+                               0.6823630732098136, 0.687370721901888, 0.7356980302943921,
+                               0.8279235246860274))
+
+# Good et al. (2014) predicted FST for r = 0, N = 1000, µ = 1e-5
+cgFST <- FST_from_B(cgB$B, N = 1000, m = 0.09, d = 10)
+
+# Zeng & Corcoran (2015) predicted FST for r = 0, N = 1000, µ = 1e-5
+zcFST <- sapply(m0.09_cM1_FST$t, calculate_predicted_FST, L = 700, N = 1000, mu = 1e-5, m = 0.09, r_bp = 1.414e-05, d = 10)
+
+# Mike's B
+mB <- data.frame(NS = c(0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                     B = c(1, 0.9999848775558341, 0.9999428280320615, 0.9997696632704373,
+                           0.9991152754492757, 0.9943507384497146, 0.9918531004114927, 
+                           0.9867892088306519))
+
+mFST <- FST_from_B(mB$B, N = 1000, m = 0.09, d = 10)
+
+# Updated B using Buffalo and Kern model with migration effect
+bkB <- data.frame(B_rescaled_py_m = c(1, 0.9931419896324258, 0.9928677679522827, 0.9917844218946865,
+                                      0.9897519612820603, 0.9868490023393329, 0.9844456037708784,
+                                      0.979416811071367))
+
+bkFST <- FST_from_B(bkB$B_rescaled_py_m, N = 1000, m = 0.09, d = 10)
+
+m0.09_cM1_FST <- m0.09_cM1_FST %>%
+  mutate(zcFST = zcFST) %>%
+  mutate(cgFST = cgFST) %>%
+  mutate(mFST = mFST) %>%
+  mutate(bkFST = bkFST)
+
+m0.09_cM1_FST
+```
+
+```{r Plot FST vs. t for m = 0.09, R = 0.01, d = 10}
+
+cg_FST_mHigh_cM1_plot <- ggplot(data = m0.09_cM1_FST, aes(x = 500*t, y = FST)) + 
+  geom_point(aes(size = 1, color = 'Simulations')) + # Observed FST
+  geom_line(aes(x = 500*t, y = FST, size = 0.5, color = 'Simulations')) + # Observed FST
+  geom_errorbar(aes(ymin = FST-ci, ymax = FST+ci, color = 'Simulations')) + # Observed FST 95%CIs
+  geom_point(aes(x = 500*t, y = zcFST, size = 1, color = 'B from Nordborg et al. (1996)')) + # Nordborg et al. (1996) FST
+  geom_point(aes(y = cgFST, size = 1, color = 'B from Good et al. (2014)')) + # Good et al. (2014) FST
+  geom_point(aes(y = mFST, size = 1, color = "B from Good et al. (2014) with migration effect")) + # Mike B
+  #geom_point(aes(y = bkFST, size = 1, color = 'B from Buffalo and Kern (2024)')) + 
+  theme_minimal() + xlab(expression(N[local]*t)) + ylab(expression(F[ST])) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title=element_text(size = 15),
+        axis.line = element_line(colour = 'black'),
+        legend.position = 'none',
+        legend.text.align = 0,
+        legend.text = element_text(size = 15),
+        legend.title = element_blank(),
+        plot.title = element_text(size = 15)) + 
+  guides(size = "none") + 
+  scale_color_manual(values = c('#35b779','#fde725', '#440154', 'grey'),
+                     labels = c('B using Eq. ST3)', 'B using Eq. ST4', 'classic B', 'Simulations')) + 
+  #scale_color_manual(values = c('pink', '#440154', 'grey'),
+   #                  labels = c(expression(B[local] ~ 'from Eq. 2'), 'B from Zeng & Corcoran (Eq. 7)',
+  #                              'Simulations')) + 
+  ylim(0, 0.01) + 
+  ggtitle(expression(N[local]*m ~ '= 45, M = 0.01'))
+  
+
+nb_FST_plot <- ggplot(data = m0.09_cM1_FST, aes(x = 500*t, y = FST)) + 
+  geom_point(aes(color = 'Simulations')) + # Observed FST
+  geom_line(aes(x = 500*t, y = FST, color = 'Simulations')) + # Observed FST
+  geom_errorbar(aes(ymin = FST-ci, ymax = FST+ci, color = 'Simulations')) + # Observed FST 95%CIs
+  geom_point(aes(y = zcFST, color = 'Nordborg et al. (1996)')) + # Nordborg et al. (1996) B
+  #geom_point(aes(x = 1000*s, y = cgFST, size = 1), color = '#E69F00') + # Good et al. (2014) B
+  theme_minimal() + theme(panel.grid.major = element_blank(),
+                          panel.grid.minor = element_blank(),
+                          axis.line = element_line(colour = 'black'),
+                          legend.title = element_blank(),
+                          legend.position = "none") + 
+  scale_color_manual(values = c('#440154', '#999999')) + 
+  xlab(expression(N[local]*t)) + ylab(expression(F[ST]))
+
+plot_mHigh_cM1 <- ggdraw() +
+draw_plot(cg_FST_mHigh_cM1_plot, width = 1) +
+draw_plot(nb_FST_plot, x = 0.6, y = .6, width = .3, height = .3)
+
+plot_mHigh_cM1
+```
+
+```{r Read in pi_s and pi_t data and organize to plot pi_t, pi_s vs t for m = 0.09, M = 0.01, d = 10}
+
+# Good et al.(2014) predicted B  for r = 0, N = 1000, µ = 1e-5
+mB_local <- data.frame(NS = c(0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                     B = c(1, 0.999, 0.999, 0.999, 0.999, 0.994, 0.992, 0.987))
+
+cgB_local <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                         B = c(1, 0.977, 0.932, 0.832, 0.682, 0.687, 0.736, 0.828))
+
+# Updated B using Buffalo and Kern model with migration effect
+bkB <- data.frame(B_rescaled_py_m = c(1, 0.9931419896324258, 0.9928677679522827, 0.9917844218946865,
+                                      0.9897519612820603, 0.9868490023393329, 0.9844456037708784,
+                                      0.979416811071367))
+
+# Calculate FST using total diversity
+m_FST_t <- FST_from_B(mB_local$B, N = 1000, m = 0.09, d = 10, b = FALSE)
+cg_FST_t <- FST_from_B(cgB_local$B, N = 1000, m = 0.09, d = 10, b = FALSE)
+bk_FST_t <- FST_from_B(bkB$B_rescaled_py_m, N = 1000, m = 0.09, d = 10, b = FALSE)
+
+# Summarize data to plot pi_t vs. s
+m0.09_cM1_pi_t <- summarySE(m0.09_cM1, measurevar = 'pi_t', groupvars = 't') %>%
+  mutate(m_FST_t = m_FST_t) %>%
+  mutate(global_Ne_m = 5000 / (1 - m_FST_t)) %>%
+  mutate(global_Ne_cg = 5000 / (1 - cg_FST_t)) %>%
+  mutate(global_Ne_bk = 5000 / (1 - bk_FST_t))
+
+# Define variables to calculate predicted pi_t and then calculate predicted pi_t
+mB_global <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                  B = c(1, 0.604, 0.470, 0.422, 0.512, 0.632, 0.707, 0.819))
+
+cgB_global <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                  B = c(1, 0.604, 0.470, 0.422, 0.512, 0.632, 0.707, 0.819))
+
+bkB_global <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                  B = c(1, 0.4976596643536946, 0.4530964342177448, 0.44188330702444023,
+                        0.5095819487497514, 0.6075134342947262, 0.6660786852438735, 0.7479726072912861))
+
+# Calculate predicted pi_t
+mu = 1e-5
+
+global_Ne_m = m0.09_cM1_pi_t$global_Ne_m
+predicted_pi_t_m <- (4 * global_Ne_m * mu * mB_global$B) / (1 + 4 * global_Ne_m * mu * mB_global$B)
+
+global_Ne_cg = m0.09_cM1_pi_t$global_Ne_cg
+predicted_pi_t_cg <- (4 * global_Ne_cg * mu * cgB_global$B) / (1 + 4 * global_Ne_cg * mu * cgB_global$B)
+
+global_Ne_bk = m0.09_cM1_pi_t$global_Ne_bk
+predicted_pi_t_bk <- (4 * global_Ne_bk * mu * bkB_global$B) / (1 + 4 * global_Ne_bk * mu * bkB_global$B)
+
+m0.09_cM1_pi_t <- m0.09_cM1_pi_t %>%
+  mutate(predicted_pi_t_m = predicted_pi_t_m) %>%
+  mutate(predicted_pi_t_cg = predicted_pi_t_cg) %>%
+  mutate(predicted_pi_t_bk = predicted_pi_t_bk)
+
+# Read in pi_s data and calculate predicted pi_s
+m0.09_cM1_pi_s <- summarySE(m0.09_cM1, measurevar = 'pi_s', groupvars = 't')
+
+m0.09_cM1_pi_s <- m0.09_cM1_pi_s %>%
+  mutate(predicted_pi_s_m = predicted_pi_t_m * (1 - m_FST_t)) %>%
+  mutate(predicted_pi_s_cg = predicted_pi_t_cg * (1 - cg_FST_t)) %>%
+  mutate(predicted_pi_s_bk = predicted_pi_t_bk * (1 - bk_FST_t))
+
+m0.09_cM1_pi_s
+m0.09_cM1_pi_t
+```
+
+```{r Plot pi_t, pi_s vs t for m = 0.09, M = 0.01, d = 10}
+
+m0.09_cm1_pi_t_plot <- ggplot(data = m0.09_cM1_pi_t, aes(x = 5000*t, y = pi_t)) + 
+  geom_point(aes(size = 1, color = 'Observed')) + 
+  geom_line(aes(x = 5000*t, y = pi_t, size = 0.5, color = 'Observed')) + 
+  geom_errorbar(aes(ymin = pi_t-ci, ymax = pi_t+ci, color = 'Observed')) +
+  geom_point(aes(x = 5000*t, y = predicted_pi_t_m, size = 1, color = 'predicted')) + 
+  #geom_point(aes(x = 5000*t, y = predicted_pi_t_bk, size = 1, color = 'Predicted')) + 
+  theme_minimal() + xlab(expression(N[global]*t)) + ylab(expression(pi[t])) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title = element_text(size = 15),
+        axis.line = element_line(colour = 'black'),
+        legend.title = element_blank(),
+        legend.position = 'none',
+        plot.title = element_text(size = 15)) + 
+  scale_colour_manual(values = c('#999999', '#fde725')) + 
+  #scale_colour_manual(values = c('#999999', 'pink')) + 
+  guides(size = "none") + 
+  ylim(0, 0.2) + ggtitle(expression(N[global]*m ~ '= 45, M = 0.01'))
+
+m0.09_cm1_pi_s_plot <- ggplot(data = m0.09_cM1_pi_s, aes(x = 5000*t, y = pi_s)) + 
+  geom_point(aes(size = 1, color = 'observed')) + 
+  geom_line(aes(x = 5000*t, y = pi_s, size = 0.5, color = 'observed')) + 
+  geom_errorbar(aes(ymin = pi_s-ci, ymax = pi_s+ci, color = 'observed')) +
+  geom_point(aes(x = 5000*t, y = predicted_pi_s_m, size = 1, color = 'predicted')) + 
+  #geom_point(aes(x = 5000*t, y = predicted_pi_s_bk, size = 1, color = 'predicted')) + 
+  theme_minimal() + xlab(expression(N[global]*t)) + ylab(expression(pi[s])) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title = element_text(size = 15),
+        axis.line = element_line(colour = 'black'),
+        legend.title = element_blank(),
+        legend.position = 'none',
+        plot.title = element_text(size = 15)) +
+  scale_colour_manual(values = c('#999999', '#fde725')) + 
+  #scale_colour_manual(values = c('#999999', 'pink')) + 
+  guides(size = "none") + ggtitle(expression(N[local]*m ~ '= 45, M = 0.01'))
+
+m0.09_cm1_pi_t_plot
+m0.09_cm1_pi_s_plot
+
+```
+# m = 0.009, M = 0.01, d = 10
+```{r Read in data and organize to plot FST vs. t}
+
+# Read in m = 0.01, r = 0, d = 10 and name columns
+m0.009_cM1 <- read_csv('/Users/asad/drive/desktop/phd_ubc/projects/fst_bgs/10deme/data/pi_FST_mInt_cM=1_25N.csv')
+colnames(m0.009_cM1) <- c('t', 'pi_s', 'pi_t', 'FST')
+
+# Summarize data to plot s vs FST and s 
+m0.009_cM1_FST <- summarySE(m0.009_cM1, measurevar = 'FST', groupvars = 't')
+
+# Good et al.(2014) predicted B  for r = 1.414e-05, N = 1000, µ = 1e-5
+cgB <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                         B = c(1, 0.9775004474560725, 0.9325401616445477, 0.8323984524252939,
+                               0.6823630732098136, 0.687370721901888, 0.7356980302943921, 0.8279235246860274))
+
+# Good et al. (2014) predicted FST for r = 0, N = 1000, µ = 1e-5
+cgFST <- FST_from_B(cgB$B, N = 1000, m = 0.009, d = 10)
+
+# Zeng & Corcoran (2015) predicted FST for r = 0, N = 1000, µ = 1e-5
+zcFST <- sapply(m0.009_cM1_FST$t, calculate_predicted_FST, N = 1000, mu = 1e-5, m = 0.009, r = 1.414e-05, d = 10, L = 750)
+
+# Mike's B with Good et al. (2014) method
+mB <- data.frame(NS = c(0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                     B = c(1,0.9989974817876793, 0.9963204939619028, 0.9862406187582845,
+                           0.954341189360231, 0.8794447410832775, 0.8741787089671462, 0.8905921545605668))
+
+mFST <- FST_from_B(mB$B, N = 1000, m = 0.009, d = 10)
+
+# Buffalo and Kern B
+bkB <- data.frame(B_rescaled_py_m = c(1, 0.9864245211372732, 0.9741816150769701, 0.9274979250775806,
+                                      0.8846927266288958, 0.8645384754623678, 0.8643678108404033,
+                                      0.8843636893270357))
+
+bkFST <- FST_from_B(bkB$B_rescaled_py_m, N = 1000, m = 0.009, d = 10)
+
+m0.009_cM1_FST <- m0.009_cM1_FST %>%
+  mutate(zcFST = zcFST) %>%
+  mutate(cgFST = cgFST) %>%
+  mutate(mFST = mFST) %>%
+  mutate(bkFST = bkFST)
+
+m0.009_cM1_FST
+```
+
+```{r Plot FST vs. s for m = 0.009, M = 0.01, d = 10}
+
+cg_FST_mInt_cM1_plot <- ggplot(data = m0.009_cM1_FST, aes(x = 500*t, y = FST)) + 
+  geom_point(aes(size = 1, color = 'Simulations')) + # Observed FST
+  geom_line(aes(x = 500*t, y = FST, size = 0.5, color = 'Simulations')) + # Observed FST
+  geom_errorbar(aes(ymin = FST-ci, ymax = FST+ci, color = 'Simulations')) + # Observed FST 95%CIs
+  geom_point(aes(x = 500*t, y = zcFST, size = 1, color = 'B from Nordborg ')) + # Nordborg et al. (1996) FST
+  geom_point(aes(y = cgFST, size = 1, color = 'B from Good et al. (2014)')) + # Good et al. (2014) FST
+  geom_point(aes(y = mFST, size = 1, color = "B from Good et al. (2014) with migration effect")) + # Mike B
+  #geom_point(aes(y = bkFST, size = 1, color = 'B from Eq. 2 & 3')) +
+  theme_minimal() + xlab(expression(N[local]*t)) + ylab(expression(F[ST])) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title = element_text(size = 15),
+        axis.line = element_line(colour = 'black'),
+        legend.position = 'none',
+        legend.title = element_blank(),
+        legend.text = element_text(size = 10),
+        plot.title = element_text(size = 15)) + 
+  ylim(0.045, 0.08) + 
+  scale_color_manual(values = c('#35b779','#fde725', '#440154', 'grey'),
+                     labels = c('B using Eq. ST3)', 'B using Eq. ST4', 'classic B', 'Simulations')) + 
+  #scale_color_manual(values = c('pink', '#440154', 'grey')) + 
+  guides(size = "none") + 
+  ggtitle(expression(N[local]*m ~ '= 4.5, M = 0.01'))
+  
+
+nb_FST_plot <- ggplot(data = m0.009_cM1_FST, aes(x = 500*t, y = FST)) + 
+  geom_point(aes(color = 'Simulations')) + 
+  geom_line(aes(x = 500*t, y = FST, color = 'Simulations')) + # Observed FST
+  geom_errorbar(aes(ymin = FST-ci, ymax = FST+ci, color = 'Simulations')) + # Observed FST 95%CIs
+  geom_point(aes(y = zcFST, color = 'B from Nordborg et al. (1996)')) + # Nordborg et al. (1996) B
+  #geom_point(aes(x = 1000*s, y = cgFST, size = 1), color = '#E69F00') + # Good et al. (2014) B
+  theme_minimal() + theme(panel.grid.major = element_blank(),
+                          panel.grid.minor = element_blank(),
+                          axis.line = element_line(colour = 'black'),
+                          legend.title = element_blank(),
+                          legend.position = "none") + 
+  scale_color_manual(values = c('#440154', '#999999')) + 
+  xlab(expression(N[local]*t)) + ylab(expression(F[ST]))
+
+plot_mInt_cM1 <- ggdraw() +
+draw_plot(cg_FST_mInt_cM1_plot, width = 1) +
+draw_plot(nb_FST_plot, x = 0.6, y = .6, width = .3, height = .3)
+
+plot_mInt_cM1
+```
+```{r Read in pi_s and pi_t data and organize to plot pi_t, pi_s vs t for m = 0.009, M = 0.01, d = 10}
+
+# Good et al.(2014) predicted B  for r = 0, N = 1000, µ = 1e-5
+mB_local <- data.frame(NS = c(0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                     B = c(1, 0.9989974817876793, 0.9963204939619028, 0.9862406187582845,
+                           0.954341189360231, 0.8794447410832775, 0.8741787089671462,
+                           0.8905921545605668))
+
+cgB_local <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                         B = c(1, 0.9775004474560725, 0.9325401616445477, 0.8323984524252939,
+                               0.6823630732098136, 0.687370721901888, 0.7356980302943921, 0.8279235246860274))
+
+bkB_local <- data.frame(B_rescaled_py_m = c(1, 0.9864245211372732, 0.9741816150769701, 0.9274979250775806,
+                                      0.8846927266288958, 0.8645384754623678, 0.8643678108404033,
+                                      0.8843636893270357))
+
+# Calculate FST using total diversity
+m_FST_t <- FST_from_B(mB_local$B, N = 1000, m = 0.009, d = 10, b = FALSE)
+cg_FST_t <- FST_from_B(cgB_local$B, N = 1000, m = 0.009, d = 10, b = FALSE)
+bk_FST_t <- FST_from_B(bkB$B_rescaled_py_m, N = 1000, m = 0.009, d = 10, b = FALSE)
+
+# Summarize data to plot pi_t vs. s
+m0.009_cM1_pi_t <- summarySE(m0.009_cM1, measurevar = 'pi_t', groupvars = 't') %>%
+  mutate(m_FST_t = m_FST_t) %>%
+  mutate(global_Ne_m = 5000 / (1 - m_FST_t)) %>%
+  mutate(global_Ne_cg = 5000 / (1 - cg_FST_t)) %>%
+  mutate(global_Ne_bk = 5000 / (1 - bk_FST_t))
+
+# Define variables to calculate predicted pi_t and then calculate predicted pi_t
+mB_global <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                  B = c(1, 0.5965702110270712, 0.46148334148019554, 0.41993662423959566, 0.5113172918857283, 
+                        0.6319265083549042, 0.707069461233443, 0.8193904364025939))
+
+cgB_global <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                  B = c(1, 0.295, 0.204, 0.151, 0.275, 0.505, 0.631, 0.793))
+
+bkB_global <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                  B = c(1, 0.4935010881198817, 0.4494697621982438, 0.4392949089002095, 
+                        0.5085918840093115, 0.6071703487977733, 0.6659105438634596,
+                        0.7479186981650418))
+
+# Calculate predicted pi_t
+mu = 1e-5
+
+global_Ne_m = m0.009_cM1_pi_t$global_Ne_m
+predicted_pi_t_m <- (4 * global_Ne_m * mu * mB_global$B) / (1 + 4 * global_Ne_m * mu * mB_global$B)
+
+global_Ne_cg = m0.009_cM1_pi_t$global_Ne_cg
+predicted_pi_t_cg <- (4 * global_Ne_cg * mu * cgB_global$B) / (1 + 4 * global_Ne_cg * mu * cgB_global$B)
+
+global_Ne_bk = m0.009_cM1_pi_t$global_Ne_bk
+predicted_pi_t_bk <- (4 * global_Ne_bk * mu * bkB_global$B) / (1 + 4 * global_Ne_bk * mu * bkB_global$B)
+
+m0.009_cM1_pi_t <- m0.009_cM1_pi_t %>%
+  mutate(predicted_pi_t_m = predicted_pi_t_m) %>%
+  mutate(predicted_pi_t_cg = predicted_pi_t_cg) %>%
+  mutate(predicted_pi_t_bk = predicted_pi_t_bk)
+
+# Read in pi_s data and calculate predicted pi_s
+m0.009_cM1_pi_s <- summarySE(m0.009_cM1, measurevar = 'pi_s', groupvars = 't')
+predicted_pi_s_m <- predicted_pi_t_m * (1 - m_FST_t)
+predicted_pi_s_cg <- predicted_pi_t_cg * (1 - cg_FST_t)
+predicted_pi_s_bk <- predicted_pi_t_bk * (1 - bk_FST_t)
+
+m0.009_cM1_pi_s <- m0.009_cM1_pi_s %>%
+  mutate(predicted_pi_s_m = predicted_pi_s_m) %>%
+  mutate(predicted_pi_s_cg = predicted_pi_s_cg) %>%
+  mutate(predicted_pi_s_bk = predicted_pi_s_bk)
+
+# Output dataframes
+m0.009_cM1_pi_t
+m0.009_cM1_pi_s
+```
+
+```{r Plot pi_t vs s for m = 0.009, M = 0.01, d = 10}
+
+m0.009_cm1_pi_t_plot <- ggplot(data = m0.009_cM1_pi_t, aes(x = 5000*t, y = pi_t)) + 
+  geom_point(aes(size = 1, color = 'Observed')) + 
+  geom_line(aes(x = 5000*t, size = 0.5, y = pi_t, color = 'Observed')) + 
+  geom_errorbar(aes(ymin = pi_t-ci, ymax = pi_t+ci, color = 'Observed')) +
+  geom_point(aes(x = 5000*t, y = predicted_pi_t_m, size = 1, color = 'Predicted')) +
+  #geom_point(aes(x = 5000*t, y = predicted_pi_t_bk, size = 1, color = 'Predicted')) + 
+  theme_minimal() + xlab(expression(N[global]*t)) + ylab(expression(pi[t])) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title = element_text(size = 15),
+        legend.title = element_blank(),
+        axis.line = element_line(colour = 'black'),
+        legend.position = 'none',
+        legend.text = element_text(size = 10),
+        plot.title = element_text(size = 15)) + 
+  scale_colour_manual(values = c('#999999', '#fde725')) + 
+  #scale_colour_manual(values = c('#999999', 'pink')) + 
+  guides(size = "none") + 
+  ylim(0, 0.20) + 
+  ggtitle(expression(N[global]*m ~ '= 4.5, M = 0.01'))
+
+m0.009_cm1_pi_s_plot <- ggplot(data = m0.009_cM1_pi_s, aes(x = 5000*t, y = pi_s)) + 
+  geom_point(aes(size = 1, color = 'Observed')) + 
+  geom_line(aes(x = 5000*t, size = 0.5, y = pi_s, color = 'Observed')) + 
+  geom_errorbar(aes(ymin = pi_s-ci, ymax = pi_s+ci, color = 'Observed')) +
+  geom_point(aes(x = 5000*t, y = predicted_pi_s_m, size = 1, color = 'Predicted')) +
+  #geom_point(aes(x = 5000*t, y = predicted_pi_s_bk, size = 1, color = 'Predicted')) + 
+  theme_minimal() + xlab(expression(N[global]*t)) + ylab(expression(pi[s])) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title = element_text(size = 15),
+        legend.title = element_blank(),
+        axis.line = element_line(colour = 'black'),
+        legend.position = 'none',
+        legend.text = element_text(size = 10),
+        plot.title = element_text(size = 15)) + 
+  scale_colour_manual(values = c('#999999', '#fde725')) + 
+  #scale_colour_manual(values = c('#999999', 'pink')) + 
+  guides(size = "none") +   ggtitle(expression(N[local]*m ~ '= 4.5, M = 0.01'))
+
+m0.009_cm1_pi_t_plot
+m0.009_cm1_pi_s_plot
+```
+# m = 0.00045, M = 0.01, d = 10
+
+```{r Read in data and organize to plot FST vs. s}
+# Read in m = 0.00045, r = 0, d = 10 and name columns
+m0.00045_cM1 <- read_csv('/Users/asad/drive/desktop/phd_ubc/projects/fst_bgs/10deme/data/pi_FST_mLow_cM=1_25N.csv')
+colnames(m0.00045_cM1) <- c('t', 'r', 'pi_s', 'pi_t', 'FST')
+
+# Summarize data to plot s vs FST and s 
+m0.00045_cM1_FST <- summarySE(m0.00045_cM1, measurevar = 'FST', groupvars = 't')
+
+# Good et al.(2014) predicted B  for r = 1.41e-05, N = 1000, µ = 1e-5
+cgB <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                         B = c(1, 0.9775004474560725, 0.9325401616445476, 0.8323984524252939,
+                               0.6823630732098136, 0.687370721901888, 0.7356980302943921,
+                               0.8279235246860274))
+
+# Good et al. (2014) predicted FST for r = 0, N = 1000, µ = 1e-5
+cgFST <- FST_from_B(cgB$B, N = 1000, m = 0.00045, d = 10)
+
+# Zeng & Corcoran (2015) predicted FST for r = 0, N = 1000, µ = 1e-5
+zcFST <- sapply(m0.00045_cM1_FST$t, calculate_predicted_FST, L = 700, N = 1000, mu = 1e-5, m = 0.00045, r_bp = 1.41e-05, d = 10)
+
+# Mike's B
+mB <- data.frame(NS = c(0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                     B = c(1, 0.9839308752130039, 0.9493939557472649, 0.8631209474429562,
+                           0.7172496804228603, 0.7047214997935505, 0.7468492265206992,
+                           0.8321689379366138))
+
+mFST <- FST_from_B(mB$B, N = 1000, m = 0.00045, d = 10)
+
+# Updated B using Buffalo and Kern model with migration effect
+bkB <- data.frame(B_rescaled_py_m = c(1, 0.9382649574724601, 0.8770449337255763, 0.832587257651128,
+                                      0.6651297545318359, 0.7029484577921622, 0.7461760464384912,
+                                      0.8297969190425819))
+
+bkFST <- FST_from_B(bkB$B_rescaled_py_m, N = 1000, m = 0.00045, d = 10)
+
+m0.00045_cM1_FST <- m0.00045_cM1_FST %>%
+  mutate(zcFST = zcFST) %>%
+  mutate(cgFST = cgFST) %>%
+  mutate(mFST = mFST) %>%
+  mutate(bkFST = bkFST)
+
+m0.00045_cM1_FST
+```
+
+```{r Plot FST vs. s for m = 0.00045, R = 0.01, d = 10}
+
+cg_FST_mLow_cM1_plot <- ggplot(data = m0.00045_cM1_FST, aes(x = 500*t, y = FST)) + 
+  geom_point(aes(size = 1, color = 'Simulations')) + # Observed FST
+  geom_line(aes(x = 500*t, y = FST, size = 0.5, color = 'Simulations')) + # Observed FST
+  geom_errorbar(aes(ymin = FST-ci, ymax = FST+ci, color = 'Simulations')) + # Observed FST 95%CIs
+  geom_point(aes(x = 500*t, y = zcFST, size = 1, color = 'B from Nordborg et al. (1996)')) + # Nordborg et al. (1996) FST
+  geom_point(aes(y = cgFST, size = 1, color = 'B from Good et al. (2014)')) + # Good et al. (2014) FST
+  geom_point(aes(y = mFST, size = 1, color = "B from Good et al. (2014) with migration effect")) + # Mike B
+  #geom_point(aes(y = bkFST, size = 1, color = "B Buffalo and Kern (2024")) + 
+  theme_minimal() + xlab(expression(N[local]*t)) + ylab(expression(F[ST])) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title=element_text(size = 15),
+        axis.line = element_line(colour = 'black'),
+        legend.position = 'none',
+        legend.title = element_blank(),
+        plot.title = element_text(size = 15)) + 
+  scale_color_manual(values = c('#35b779','#fde725', '#440154', 'grey'),
+                     labels = c('B using Eq. ST3)', 'B using Eq. ST4', 'classic B', 'Simulations')) + 
+  #scale_color_manual(values = c('pink', '#440154', 'grey')) + 
+  guides(size = "none") + ylim(0.48, 0.65) + 
+  ggtitle(expression(N[local]*m ~ '= 0.225, M = 0.01'))
+  
+
+nb_FST_plot <- ggplot(data = m0.00045_cM1_FST, aes(x = 500*t, y = FST)) + 
+  geom_point(aes(color = 'Simulations')) + # Observed FST
+  geom_line(aes(x = 500*t, y = FST, color = 'Simulations')) + # Observed FST
+  geom_errorbar(aes(ymin = FST-ci, ymax = FST+ci, color = 'Simulations')) + # Observed FST 95%CIs
+  geom_point(aes(y = zcFST, color = 'B from Nordborg et al. (1996)')) + # Nordborg et al. (1996) B
+  #geom_point(aes(x = 1000*s, y = cgFST, size = 1), color = '#E69F00') + # Good et al. (2014) B
+  theme_minimal() + theme(panel.grid.major = element_blank(),
+                          panel.grid.minor = element_blank(),
+                          axis.line = element_line(colour = 'black'),
+                          legend.title = element_blank(),
+                          legend.position = 'none') + 
+  scale_color_manual(values = c('#440154', '#999999')) + 
+  xlab(expression(N[local]*t)) + ylab(expression(F[ST]))
+
+plot_mLow_cM1 <- ggdraw() +
+draw_plot(cg_FST_mLow_cM1_plot) +
+draw_plot(nb_FST_plot, x = 0.7, y = .6, width = .3, height = .3)
+
+plot_mLow_cM1
+```
+
+```{r Read in pi_s and pi_t data and organize to plot pi_t, pi_s vs s for m = 0.00045, M = 0.01, d = 10}
+
+# Good et al.(2014) predicted B for r = 0, N = 1000, µ = 1e-5
+mB_local <- data.frame(NS = c(0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                     B = c(1, 0.983, 0.949, 0.863, 0.717, 0.705, 0.747, 0.832))
+
+cgB_local <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                         B = c(1, 0.977, 0.932, 0.832, 0.682, 0.687, 0.736, 0.828))
+
+bkB <- data.frame(B_rescaled_py_m = c(1, 0.9382649574724601, 0.8770449337255763, 0.832587257651128,
+                                      0.6651297545318359, 0.7029484577921622, 0.7461760464384912,
+                                      0.8297969190425819))
+
+# Calculate FST using total diversity
+m_FST_t <- FST_from_B(mB_local$B, N = 1000, m = 0.00045, d = 10, b = FALSE)
+cg_FST_t <- FST_from_B(cgB_local$B, N = 1000, m = 0.00045, d = 10, b = FALSE)
+bkFST_t <- FST_from_B(bkB$B_rescaled_py, N = 1000, m = 0.00045, d = 10, b = FALSE)
+
+# Summarize data to plot pi_t vs. s
+m0.00045_cM1_pi_t <- summarySE(m0.00045_cM1, measurevar = 'pi_t', groupvars = 't') %>%
+  mutate(m_FST_t = m_FST_t) %>%
+  mutate(global_Ne_m = 5000 / (1 - m_FST_t)) %>%
+  mutate(global_Ne_cg = 5000 / (1 - cg_FST_t)) %>%
+  mutate(global_Ne_bk = 5000 / (1 - bkFST_t))
+
+# Define variables to calculate predicted pi_t and then calculate predicted pi_t
+mB_global <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                  B = c(1, 0.4713936586005259, 0.3741319424807559, 0.3932010988731043, 0.5024708656771494,
+                        0.628784385567103, 0.7054935408012519, 0.8189451103551408))
+
+cg_B_global <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                  B = c(1, 0.471, 0.374, 0.393, 0.502, 0.629, 0.705, 0.819))
+
+bk_B_global <- data.frame(NS = c(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0),
+                  B = c(1, 0.4319768025182154, 0.3977238020345814, 0.4061457006622044, 
+                        0.4961452282422612, 0.6031530594563915, 0.6640021909580334, 0.7474221912711908))
+
+# Calculate predicted pi_t
+mu = 1e-5
+
+global_Ne_m = m0.00045_cM1_pi_t$global_Ne_m
+predicted_pi_t_m <- (4 * global_Ne_m * mu * mB_global$B) / (1 + 4 * global_Ne_m * mu * mB_global$B)
+
+global_Ne_cg = m0.00045_cM1_pi_t$global_Ne_cg
+predicted_pi_t_cg <- (4 * global_Ne_cg * mu * cgB_global$B) / (1 + 4 * global_Ne_cg * mu * cgB_global$B)
+
+global_Ne_bk = m0.00045_cM1_pi_t$global_Ne_bk
+predicted_pi_t_bk <- (4 * global_Ne_bk * mu * bk_B_global$B) / (1 + 4 * global_Ne_bk * mu * bk_B_global$B)
+
+m0.00045_cM1_pi_t <- m0.00045_cM1_pi_t %>%
+  mutate(predicted_pi_t_m = predicted_pi_t_m) %>%
+  mutate(predicted_pi_t_cg = predicted_pi_t_cg) %>%
+  mutate(predicted_pi_t_bk = predicted_pi_t_bk)
+
+# Read in pi_s data and calculate predicted pi_s
+m0.00045_cM1_pi_s <- summarySE(m0.00045_cM1, measurevar = 'pi_s', groupvars = 't')
+
+m0.00045_cM1_pi_s <- m0.00045_cM1_pi_s %>%
+  mutate(predicted_pi_s_m = predicted_pi_t_m * (1 - m_FST_t)) %>%
+  mutate(predicted_pi_s_cg = predicted_pi_t_cg * (1 - cg_FST_t)) %>%
+  mutate(predicted_pi_s_bk = predicted_pi_t_bk * (1 - bk_FST_t))
+
+m0.00045_cM1_pi_s
+m0.00045_cM1_pi_t
+```
+
+```{r Plot pi_t, pi_s vs t for m = 0.00045, M = 0.01, d = 10}
+
+m0.00045_cm1_pi_t_plot <- ggplot(data = m0.00045_r0_pi_t, aes(x = 5000*t, y = pi_t)) + 
+  geom_point(aes(size = 1, color = 'Observed')) + 
+  geom_line(aes(x = 5000*t, y = pi_t, size = 0.5, color = 'Observed')) + 
+  geom_errorbar(aes(ymin = pi_t-ci, ymax = pi_t+ci, color = 'Observed')) +
+  geom_point(aes(x = 5000*t, y = predicted_pi_t_m, size = 1, color = 'predicted')) + 
+  #geom_point(aes(x = 5000*t, y = predicted_pi_t_bk, size = 1, color = 'Predicted')) + 
+  theme_minimal() + xlab(expression(N[global]*t)) + ylab(expression(pi[t])) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title = element_text(size = 15),
+        axis.line = element_line(colour = 'black'),
+        legend.title = element_blank(),
+        legend.position = 'none',
+        plot.title = element_text(size = 15)) + 
+  scale_colour_manual(values = c('#999999', '#fde725')) + 
+  #scale_colour_manual(values = c('#999999', 'pink')) + 
+  guides(size = "none") + 
+  ylim(0, 0.3) + ggtitle(expression(N[global]*m ~ '= 0.225, M = 0.01'))
+
+m0.00045_cm1_pi_s_plot <- ggplot(data = m0.00045_r0_pi_s, aes(x = 5000*t, y = pi_s)) + 
+  geom_point(aes(size = 1, color = 'observed')) + 
+  geom_line(aes(x = 5000*t, y = pi_s, size = 0.5, color = 'observed')) +  
+  geom_errorbar(aes(ymin = pi_s-ci, ymax = pi_s+ci, color = 'observed')) +
+  geom_point(aes(x = 5000*t, y = predicted_pi_s_m, size = 1, color = 'predicted')) + 
+  #geom_point(aes(x = 5000*t, y = predicted_pi_s_bk, size = 1, color = 'predicted')) + 
+  theme_minimal() + xlab(expression(N[global]*t)) + ylab(expression(pi[s])) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title = element_text(size = 15),
+        axis.line = element_line(colour = 'black'),
+        legend.title = element_blank(),
+        legend.position = 'none',
+        plot.title = element_text(size = 15)) + 
+  scale_colour_manual(values = c('#999999', '#fde725')) + 
+  #scale_colour_manual(values = c('#999999', 'pink')) + 
+  guides(size = "none") + ggtitle(expression(N[local]*m ~ '= 0.225, M = 0.01'))
+
+m0.00045_cm1_pi_t_plot
+m0.00045_cm1_pi_s_plot
+
+```
+
+
+# Test updated theory for varying levels of migration in 10 deme model with Ne*t=15
+```{r Read in and organize data for plotting, N = 500, r = 0, Ne*t = 15, m = {0.001, 0.003, 0.01, 0.015, 0.02, 0.03, 0.05}}
+# Read in m vs. s r = 0, d = 10 and name columns
+m_r0 <- read_csv('/Users/asad/drive/desktop/phd_ubc/projects/fst_bgs/10deme/data/pi_FST_m_M=0_25N.csv')
+colnames(m_r0) <- c('t', 'm', 'pi_s', 'pi_t', 'FST')
+
+# Summarize data to plot s vs FST and s 
+m_r0_FST <- summarySE(m_r0, measurevar = 'FST', groupvars = 'm')
+
+# Good et al.(2014) predicted B  for r = 0, N = 1000, µ = 1e-5 with Mike's m term
+cg_m_B <- data.frame(m = c(0.001, 0.003, 0.01, 0.015, 0.02, 0.03, 0.05),
+                        B = c(0.700, 0.752, 0.861, 0.901, 0.926, 0.955, 0.978))
+
+# Good et al. (2014) predicted FST for r = 0, N = 1000, µ = 1e-5 with Mike's m term
+cg_m_FST <- FST_from_B(cg_m_B$B, N = 1000, d = 10, m = cg_m_B$m)
+
+# Good et al.(2014) predicted B  for r = 0, N = 1000, µ = 1e-5 without Mike's m term
+cg_B <- 0.668
+
+# Good et al. (2014) predicted FST for r = 0, N = 1000, µ = 1e-5 without Mike's m term
+cg_FST <- FST_from_B(0.668, N = 1000, d = 10, m = cg_m_B$m)
+
+# Buffalo and Kern w/ migration effect predicted B and FST
+bk_m_B <- data.frame(m = c(0.001, 0.003, 0.01, 0.015, 0.02, 0.03, 0.05),
+                        B = c(0.7057941258034827, 0.7510041059981689, 0.8519762934047548,
+                              0.8911385852254977, 0.9163292070294705, 0.945347374818587, 0.9696914345464505))
+
+bk_m_FST <- FST_from_B(bk_m_B$B, N = 1000, d = 10, m = bk_m_B$m)
+
+# Buffalo and Kern w/o migration predicted B and FST
+bk_B <- 0.6797459397557944
+
+bk_FST <- FST_from_B(bk_B, N = 1000, d = 10, m = bk_m_B$m)
+
+# Neutral FST
+neutral_FST <- FST_from_B(B = 1, N = 1000, d = 10, m = cg_m_B$m)
+
+m_r0_FST <- m_r0_FST %>%
+  mutate(cg_m_FST = cg_m_FST) %>%
+  mutate(cg_FST = cg_FST) %>%
+  mutate(neutral_FST = neutral_FST) %>%
+  mutate(bk_m_FST = bk_m_FST) %>%
+  mutate(bk_FST = bk_FST) %>%
+  mutate(m = m*9)
+
+m_r0_FST
+
+```
+
+```{r Plot FST vs. m for r = 0}
+
+N_local <- 500
+
+m_s_plot <- ggplot(data = m_r0_FST, aes (x = N_local*m, y = FST)) + 
+  geom_point(aes(color = 'Simulations', size = 1)) + 
+  geom_line(aes(y = FST, size = 0.5, color = 'Simulations')) + 
+  geom_errorbar(aes(ymin = FST-ci, ymax = FST+ci, color = 'Simulations')) + 
+  #geom_point(aes(y = bk_m_FST, size = 1, color = 'Eq. 2')) + 
+  #geom_point(aes(y = bk_FST, size = 1, color = 'Eq. 2 w/o migration')) + 
+  geom_point(aes(y = cg_m_FST, size = 1, color = 'B with migration effect')) + 
+  geom_point(aes(y = cg_FST, size = 1, color = 'B from Good et al. (2014)')) + 
+  geom_point(aes(y = neutral_FST, size = 1, color = 'Simulations w/o selection')) + 
+  geom_line(aes(y = neutral_FST, size = 0.5, color = 'Simulations w/o selection')) + 
+  theme_minimal() + 
+xlab(expression(N[local]*m)) + ylab(expression(F[ST])) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title=element_text(size = 20),
+        axis.line = element_line(colour = 'black'),
+        legend.title = element_blank(),
+        legend.position = 'none',
+        legend.text = element_text(size = 15),
+        plot.title = element_text(size = 20)) +   
+  #annotate("text", x = 0.03, y = 0.3, label = expression(N[e]*s ~ '=' ~ 15), size = 7.5) + 
+  guides(size = 'none') + 
+  scale_colour_manual(values = c('#35b779', '#fde725', 'grey', '#414487'),
+                      labels = c('B using Eq. ST3', 'B using Eq. ST4', 'classic B', 'Simulations')) + 
+  
+  #scale_colour_manual(values = c('pink', 'turquoise', 'grey', '#414487')) + 
+  xlim(7, 27) + ylim(0.005, 0.045) + ggtitle('M = 0')
+
+m_s_plot_inset <- ggplot(data = m_r0_FST, aes (x = N_local*m, y = FST)) + 
+  geom_point(aes(color = 'Simulations')) + 
+  geom_line(aes(y = FST, color = 'Simulations')) + 
+  geom_errorbar(aes(ymin = FST-ci, ymax = FST+ci, color = 'Simulations')) + 
+  #geom_point(aes(y = bk_m_FST, size = 1, color = 'Eq. ?')) + 
+  #geom_point(aes(y = cg_m_FST, size = 1, color = 'B with migration effect')) + 
+  #geom_point(aes(y = cg_FST, size = 1, color = 'B from Good et al. (2014)')) + 
+  geom_point(aes(y = neutral_FST, color = 'Simulations w/o selection')) + 
+  geom_line(aes(y = neutral_FST, color = 'Simulations w/o selection')) + 
+  theme_minimal() + 
+  xlab(expression(N[local]*m)) + ylab(expression(F[ST])) + 
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = 'black'),
+        legend.title = element_blank(),
+        legend.position = 'none') +  
+  #annotate("text", x = 0.03, y = 0.3, label = expression(N[e]*s ~ '=' ~ 15), size = 7.5) + 
+  guides(size = 'none') + xlim(0, 10) + 
+  # scale_colour_manual(values = c('#35b779', '#fde725', 'grey', '#414487')) + 
+  scale_colour_manual(values = c('grey', '#414487'))
+
+plot_m_s_plot <- ggdraw() +
+draw_plot(m_s_plot) +
+draw_plot(m_s_plot_inset, x = 0.65, y = .6, width = .3, height = .3)
+
+plot_m_s_plot
+
+```
+
+# Test Mike's addition of m factor to B equation for varying levels of migration in 10 deme model with Ne*t=15
+```{r Read in and organize data for plotting, N = 500, M = 0.01, Ne*t = 15, m = {0.001, 0.003, 0.01, 0.015, 0.02, 0.03, 0.05}}
+# Read in m vs.s, M = 0.01, d = 10 and name columns
+m_cM1 <- read_csv('/Users/asad/drive/desktop/phd_ubc/projects/fst_bgs/10deme/data/pi_FST_m_M=0.01_25N.csv')
+colnames(m_cM1) <- c('t', 'm', 'pi_s', 'pi_t', 'FST')
+
+# Summarize data to plot t vs FST
+m_cM1_FST <- summarySE(m_cM1, measurevar = 'FST', groupvars = 'm')
+
+# Good et al.(2014) predicted B  for cM = 1, N = 1000, µ = 1e-5 with Mike's m term
+cg_m_B <- data.frame(m = c(0.001, 0.003, 0.01, 0.015, 0.02, 0.03, 0.05),
+                         B = c(0.760, 0.799, 0.882, 0.914, 0.935, 0.959, 0.989))
+
+# Good et al. (2014) predicted FST for cM = 1, N = 1000, µ = 1e-5 with Mike's m term
+cg_m_FST <- FST_from_B(cg_m_B$B, N = 1000, d = 10, m = cg_m_B$m)
+
+# Good et al.(2014) predicted B  for cM = 1, N = 1000, µ = 1e-5 without Mike's m term
+cg_B <- 0.736
+
+# Good et al. (2014) predicted FST for cM = 1, N = 1000, µ = 1e-5 without Mike's m term
+cg_FST <- FST_from_B(cg_B, N = 1000, d = 10, m = cg_m_B$m)
+
+# Buffalo and Kern w/ migration predicted B and FST
+bk_m_B <- data.frame(m = c(0.001, 0.003, 0.01, 0.015, 0.02, 0.03, 0.05),
+                     B = c(0.7573970882908713, 0.7930723089232126, 0.8726227625137108,
+                           0.9042739917037891, 0.9251071429437838, 0.9497699113303448, 0.9712441319405214))
+
+bk_m_FST <- FST_from_B(bk_m_B$B, N = 1000, d = 10, m = bk_m_B$m)
+
+# Buffalo and Kern w/o migration predicted B and FST
+bk_B <- 0.736502910182809
+
+bk_FST <- FST_from_B(bk_B, N = 1000, d = 10, m = bk_m_B$m)
+
+# Neutral FST
+neutral_FST <- FST_from_B(B = 1, N = 1000, d = 10, m = cg_m_B$m)
+
+m_cM1_FST <- m_cM1_FST %>%
+  mutate(cg_m_FST = cg_m_FST) %>%
+  mutate(cg_FST = cg_FST) %>%
+  mutate(bk_m_FST = bk_m_FST) %>%
+  mutate(bk_FST = bk_FST) %>%
+  mutate(neutral_FST = neutral_FST) %>%
+  mutate(m = m*9)
+
+m_cM1_FST
+```
+
+```{r Plot FST vs. m for r = 1.414e-05 (cM = 1)}
+
+N_local <- 500
+
+m_s_M_plot <- ggplot(data = m_cM1_FST, aes (x = N_local*m, y = FST)) + 
+  geom_point(aes(color = 'Simulations', size = 1)) + 
+  geom_line(aes(y = FST, size = 0.5, color = 'Simulations')) + 
+  geom_errorbar(aes(ymin = FST-ci, ymax = FST+ci, color = 'Simulations')) + 
+  #geom_point(aes(y = bk_m_FST, size = 1, color = 'Eq. 2')) + 
+  #geom_point(aes(y = bk_FST, size = 1, color = 'Eq. 2 w/o migration effect')) + 
+  geom_point(aes(y = cg_m_FST, size = 1, color = 'B with migration effect')) + 
+  geom_point(aes(y = cg_FST, size = 1, color = 'B from Good et al. (2014)')) + 
+  geom_point(aes(y = neutral_FST, size = 1, color = 'Simulations w/o selection')) + 
+  geom_line(aes(y = neutral_FST, size = 0.5, color = 'Simulations w/o selection')) + 
+  theme_minimal() + 
+xlab(expression(N[local]*m)) + ylab(expression(F[ST])) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title=element_text(size = 20),
+        axis.line = element_line(colour = 'black'),
+        legend.title = element_blank(),
+        legend.position = c(0.4, 0.8),
+        legend.text = element_text(size = 15),
+        plot.title = element_text(size = 20)) +   
+  #annotate("text", x = 0.03, y = 0.3, label = expression(N[e]*s ~ '=' ~ 15), size = 7.5) + 
+  guides(size = 'none') + 
+  scale_colour_manual(values = c('#35b779', '#fde725', 'grey', '#414487'),
+                      labels = c('B using Eq. ST3', 'B using Eq. ST4', 'classic B', 'Simulations')) + 
+  #scale_colour_manual(values = c('pink', 'turquoise', 'grey', '#414487')) + 
+  xlim(7, 27) + ylim(0.005, 0.04) + ggtitle('M = 0.01')
+
+m_s_M_plot_inset <- ggplot(data = m_cM1_FST, aes (x = N_local*m, y = FST)) + 
+  geom_point(aes(color = 'Simulations')) + 
+  geom_line(aes(y = FST, color = 'Simulations')) + 
+  geom_errorbar(aes(ymin = FST-ci, ymax = FST+ci, color = 'Simulations')) + 
+  #geom_point(aes(y = bk_m_FST, size = 1, color = 'Eq. ?')) + 
+  #geom_point(aes(y = cg_m_FST, size = 1, color = 'B with migration effect')) + 
+  #geom_point(aes(y = cg_FST, size = 1, color = 'B from Good et al. (2014)')) + 
+  geom_point(aes(y = neutral_FST, color = 'Simulations w/o selection')) + 
+  geom_line(aes(y = neutral_FST, color = 'Simulations w/o selection')) + 
+  theme_minimal() + 
+  xlab(expression(N[local]*m)) + ylab(expression(F[ST])) + 
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = 'black'),
+        legend.title = element_blank(),
+        legend.position = 'none') +  
+  #annotate("text", x = 0.03, y = 0.3, label = expression(N[e]*s ~ '=' ~ 15), size = 7.5) + 
+  guides(size = 'none') + xlim(0, 10) + 
+  # scale_colour_manual(values = c('#35b779', '#fde725', 'grey', '#414487')) + 
+  scale_colour_manual(values = c('grey', '#414487'))
+
+plot_m_s_M_plot <- ggdraw() +
+draw_plot(m_s_M_plot) +
+draw_plot(m_s_M_plot_inset, x = 0.67, y = .6, width = .3, height = .3)
+
+plot_m_s_M_plot
+
+```
+
+# Organize data for B vs. s for varying Ne following Good et al. (2014)
+I will be doing s = {0.0005, 0.001, 0.002, 0.005, 0.01, 0.015, 0.03}, N = {10^3, 10^4, 10^5, 10^6}, R = 0, U = 7x10^-3
+
+```{r Data for B vs. s for varying Ne}
+# Dataframes for plotting
+B_s_N10_2_df <- data.frame(s = c(0.0005, 0.001, 0.002, 0.005, 0.01, 0.015, 0.03),
+                           B = c(0.999, 0.999, 0.998, 0.992, 0.973, 0.949, 0.906),
+                           N = replicate(7, 10^2))
+
+B_s_N10_3_df <- data.frame(s = c(0.0005, 0.001, 0.002, 0.005, 0.01, 0.015, 0.03),
+                           B = c(0.941, 0.855, 0.719, 0.536, 0.583, 0.668, 0.803),
+                           N = replicate(7, 10^3))
+
+B_s_N10_4_df <- data.frame(s = c(0.0005, 0.001, 0.002, 0.005, 0.01, 0.015, 0.03),
+                           B = c(0.296, 0.205, 0.151, 0.276, 0.505, 0.631, 0.793),
+                           N = replicate(7, 10^4))
+
+B_s_N10_5_df <- data.frame(s = c(0.0005, 0.001, 0.002, 0.005, 0.01, 0.015, 0.03),
+                           B = c(0.042, 0.030, 0.042, 0.249, 0.497, 0.627, 0.792),
+                           N = replicate(7, 10^5))
+```
+
+```{r Plot B vs. s for varying Ne}
+
+ggplot(data = B_s_N10_2_df, aes(x = s, y = B)) + 
+  geom_point(aes(size = 1, color = 'N = 100')) + 
+  geom_line(aes(y = B, color = 'N = 100')) + 
+  geom_point(aes(y = B_s_N10_3_df$B, size = 1, color = 'N = 1000')) + 
+  geom_line(aes(y = B_s_N10_3_df$B, color = 'N = 1000')) + 
+  geom_point(aes(y = B_s_N10_4_df$B, size = 1, color = 'N = 10000')) + 
+  geom_line(aes(y = B_s_N10_4_df$B, color = 'N = 10000')) + 
+  geom_point(aes(y = B_s_N10_5_df$B, size = 1, color = 'N = 100000')) + 
+  geom_line(aes(y = B_s_N10_5_df$B, color = 'N = 100000')) + 
+  theme_minimal() + 
+  theme(axis.line = element_line(color = 'black'),
+        legend.title = element_blank(),
+        axis.title = element_text(size = 20),
+        axis.text = element_text(size = 15),
+        legend.position = c(0.75, 0.3),
+        legend.text = element_text(size = 15)) + 
+  guides(size = 'none') + 
+  scale_color_grey()
+
+```
+# Test Buffalo and Kern method for d = 1, N = {1000, 10000}
+
+```{r Organize Data and add predictions}
+
+# N=1000, r=0 data 
+N_1000 <- read_csv('/Users/asad/drive/desktop/phd_ubc/projects/fst_bgs/10deme/data/pi_N=1000_r=0_d=1.csv')
+colnames(N_1000) <- c('t', 'pi')
+
+N_1000 <- summarySE(data = N_1000, measurevar = 'pi', groupvars = 't')
+
+pi_N1000 <- (4*1000*1e-5) / (1 + 4*1000*1e-5)
+
+bkB_1000 <- c(1, 0.7780954985818265, 0.8531412279543766, 0.7728474604353222, 
+              0.49125030160841504, 0.5655268679165503, 0.6558238667121998, 0.79694441009386)
+
+bk_pi_N1000 <- pi_N1000 * bkB_1000
+
+t <- c(0.0005, 0.001, 0.002, 0.005, 0.01, 0.015, 0.03)
+
+B_hk <- c(1, exp(-(2*700*1e-5)/(2*t)))
+
+N_1000 <- N_1000 %>%
+  mutate(bk_pi = bk_pi_N1000) %>%
+  mutate(hk_pi = pi_N1000 * B_hk)
+
+# N=1000, r=1.414e-05 data 
+N_1000_r <- read_csv('/Users/asad/drive/desktop/phd_ubc/projects/fst_bgs/10deme/data/pi_N=1000_r=1.414e-05_d=1.csv')
+colnames(N_1000_r) <- c('t', 'pi')
+
+N_1000_r <- summarySE(data = N_1000_r, measurevar = 'pi', groupvars = 't')
+
+pi_N1000_r <- (4*1000*1e-5) / (1 + 4*1000*1e-5)
+
+bkB_1000_r <- c(1, 0.8443786258133752, 0.8132514312851873, 0.5867565214635824, 
+              0.589273865842651, 0.6606911134505143, 0.7207157199981874, 0.8210880246233312)
+
+bk_pi_N1000_r <- pi_N1000_r * bkB_1000_r
+
+t <- c(0.0005, 0.001, 0.002, 0.005, 0.01, 0.015, 0.03)
+
+B_hk_r <- c(1, exp(-(2*700*1e-5)/(2*t + 700*1.414e-05)))
+
+N_1000_r <- N_1000_r %>%
+  mutate(bk_pi = bk_pi_N1000_r) %>%
+  mutate(hk_pi = pi_N1000_r * B_hk_r)
+
+# N=10000, r=0 data
+N_10000 <- read_csv('/Users/asad/drive/desktop/phd_ubc/projects/fst_bgs/10deme/data/pi_N=10000_r=0_d=1.csv')
+colnames(N_10000) <- c('t', 'pi')
+
+N_10000 <- summarySE(data = N_10000, measurevar = 'pi', groupvars = 't')
+
+pi_N10000 <- (4*10000*1e-5) / (1 + 4*10000*1e-5)
+
+bkB_10000 <- c(1, 0.7650088995001928, 0.40181803870905525, 0.3306278104940118, 
+               0.297041705829205, 0.5049447583199621, 0.6300467617854059, 0.7911239906985073)
+
+bk_pi_N10000 <- pi_N10000*bkB_10000
+
+N_10000 <- N_10000 %>%
+  mutate(bk_pi = bk_pi_N10000) %>%
+  mutate(hk_pi = pi_N10000 * B_hk)
+
+# N=10000, r=1.414e-05 data 
+N_10000_r <- read_csv('/Users/asad/drive/desktop/phd_ubc/projects/fst_bgs/10deme/data/pi_N=10000_r=1.414e-05_d=1.csv')
+colnames(N_10000_r) <- c('t', 'pi')
+
+N_10000_r <- summarySE(data = N_10000_r, measurevar = 'pi', groupvars = 't')
+
+pi_N10000_r <- (4*10000*1e-5) / (1 + 4*10000*1e-5)
+
+bkB_10000_r <- c(1, 0.43044247178386424, 0.3991276650297616, 0.40920399869273333, 
+                 0.5065782772656487, 0.6289242383175813, 0.7045010233987514, 0.8165078356367146)
+
+bk_pi_N10000_r <- pi_N10000_r * bkB_10000_r
+
+t <- c(0.0005, 0.001, 0.002, 0.005, 0.01, 0.015, 0.03)
+
+B_hk_r <- c(1, exp(-(2*700*1e-5)/(2*t + 700*1.414e-05)))
+
+N_10000_r <- N_10000_r %>%
+  mutate(bk_pi = bk_pi_N10000_r) %>%
+  mutate(hk_pi = pi_N10000_r * B_hk_r)
+
+N_1000
+N_1000_r
+N_10000
+N_10000_r
+
+
+```
+
+```{r Plot N = 1000 and N = 10000}
+
+plot_N1000_r0 <- ggplot(data = N_1000, aes(x = 1000*t, y = pi)) + 
+  geom_point(aes(size = 1, color = 'pi')) + 
+  geom_errorbar(aes(ymin = pi-ci, ymax = pi+ci, color = 'pi')) + 
+  geom_point(aes(y = bk_pi, size = 1, color = 'predicted pi using B local')) + 
+  geom_point(aes(y = hk_pi, size = 1, color = 'predicted pi using classic B')) +
+  theme_minimal() + xlab(expression(N*t)) + ylab(expression(π)) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title = element_text(size = 20),
+        axis.line = element_line(colour = 'black'),
+        legend.position = c(0.6, 0.3),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 10),
+        legend.text.align = 0,
+        plot.title = element_text(size = 20),) + 
+  ylim(0, 0.04) + 
+  scale_color_manual(values = c('pink', 'purple', 'grey'),
+                     labels = c(expression(predicted ~ 'π using' ~ B[local]), 'predicted π using classic B', expression(π))) + 
+  guides(size = 'none') + 
+  ggtitle("N = 1000, M = 0")
+
+plot_N1000_r <- ggplot(data = N_1000_r, aes(x = 1000*t, y = pi)) + 
+  geom_point(aes(size = 1, color = 'pi')) + 
+  geom_errorbar(aes(ymin = pi-ci, ymax = pi+ci, color = 'pi')) + 
+  geom_point(aes(y = bk_pi, size = 1, color = 'Buffalo and Kern (2024) predicted pi')) + 
+  geom_point(aes(y = hk_pi, size = 1, color = 'Hudson and Kaplan (1995) predicted pi')) +
+  theme_minimal() + xlab(expression(N*t)) + ylab(expression(π)) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title = element_text(size = 20),
+        axis.line = element_line(colour = 'black'),
+        legend.position = 'none',
+        legend.title = element_blank(),
+        legend.text = element_text(size = 10),
+        plot.title = element_text(size = 20)) + 
+  ylim(0, 0.042) + guides(size = 'none') + 
+  scale_color_manual(values = c('pink', 'purple', 'grey')) + 
+  ggtitle("N = 1000, M = 0.01")
+
+plot_N10000_r0 <- ggplot(data = N_10000, aes(x = 10000*t, y = pi)) + 
+  geom_point(aes(size = 1, color = 'pi')) + 
+  geom_errorbar(aes(ymin = pi-ci, ymax = pi+ci, color = 'pi')) + 
+  geom_point(aes(y = bk_pi, size = 1, color = 'Buffalo and Kern (2024) predicted pi')) + 
+  geom_point(aes(y = hk_pi, size = 1, color = 'Hudson and Kaplan (1995) predicted pi')) +
+  theme_minimal() + xlab(expression(N*t)) + ylab(expression(π)) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title = element_text(size = 20),
+        axis.line = element_line(colour = 'black'),
+        legend.position = 'none',
+        legend.title = element_blank(),
+        legend.text = element_text(size = 10),
+        plot.title = element_text(size = 20)) + 
+  ylim(0, 0.3) + 
+  scale_color_manual(values = c('pink', 'purple', 'grey')) + 
+  ggtitle("N = 10000, M = 0")
+
+plot_N10000_r <- ggplot(data = N_10000_r, aes(x = 10000*t, y = pi)) + 
+  geom_point(aes(size = 1, color = 'pi')) + 
+  geom_errorbar(aes(ymin = pi-ci, ymax = pi+ci, color = 'pi')) + 
+  geom_point(aes(y = bk_pi, size = 1, color = 'Buffalo and Kern (2024) predicted pi')) + 
+  geom_point(aes(y = hk_pi, size = 1, color = 'Hudson and Kaplan (1995) predicted pi')) +
+  theme_minimal() + xlab(expression(N*t)) + ylab(expression(π)) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title = element_text(size = 20),
+        axis.line = element_line(colour = 'black'),
+        legend.position = 'none',
+        legend.title = element_blank(),
+        legend.text = element_text(size = 10),
+        plot.title = element_text(size = 20)) + 
+  ylim(0, 0.3) + 
+  scale_color_manual(values = c('pink', 'purple', 'grey')) + 
+  ggtitle("N = 10000, M = 0.01")
+
+plot_grid(
+  plot_N1000_r0, plot_N1000_r, plot_N10000_r0, plot_N10000_r,
+  labels = 'AUTO',
+  ncol = 2
+)
+
+```
+
+## CSEE and Evolution Talk Figures
+
+```{r CSEE Talk Figures}
+
+FST_mHigh_plot <- ggplot(data = m0.09_r0_FST, aes(x = 500*t, y = FST)) + 
+  geom_point(aes(size = 1, color = 'Simulations')) + # Observed FST
+  geom_line(aes(x = 500*t, y = FST, size = 0.5, color = 'Simulations')) + # Observed FST
+  geom_errorbar(aes(ymin = FST-ci, ymax = FST+ci, color = 'Simulations')) + # Observed FST 95%CIs
+  #geom_point(aes(x = 500*t, y = zcFST, size = 1, color = 'B from Nordborg et al. (1996)')) + # Nordborg et al. (1996) FST
+  geom_point(aes(y = mFST, size = 1, color = "Simulations_model")) + # Mike B
+  #geom_point(aes(y = bkFST, size = 1, color = 'B from Buffalo and Kern (2024)')) +
+  theme_minimal() + xlab(expression(N[local]*t)) + ylab(expression(F[ST])) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title = element_text(size = 20),
+        axis.line = element_line(colour = 'black'),
+        legend.position = 'none',
+        legend.title = element_blank(),
+        legend.text = element_text(size = 10),
+        plot.title = element_text(size = 20)) + 
+  ylim(0, 0.01) + 
+  scale_color_manual(values = c('grey', 'pink', '#35b779', '#440154', '#fde725', 'grey')) + 
+  guides(size = "none") + 
+  ggtitle(expression(N[local]*m ~ '= 45, R = 0'))
+
+FST_mLow_plot <- ggplot(data = m0.00045_r0_FST, aes(x = 500*t, y = FST)) + 
+  geom_point(aes(size = 1, color = 'Simulations')) + # Observed FST
+  geom_line(aes(x = 500*t, y = FST, size = 0.5, color = 'Simulations')) + # Observed FST
+  geom_errorbar(aes(ymin = FST-ci, ymax = FST+ci, color = 'Simulations')) + # Observed FST 95%CIs
+  #geom_point(aes(x = 500*t, y = zcFST, size = 1, color = 'B from Nordborg et al. (1996)')) + # Nordborg et al. (1996) FST
+  geom_point(aes(y = mFST, size = 1, color = "Simulations_model")) + # Mike B
+  #geom_point(aes(y = bkFST, size = 1, color = 'B from Buffalo and Kern (2024)')) +
+  theme_minimal() + xlab(expression(N[local]*t)) + ylab(expression(F[ST])) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title = element_text(size = 20),
+        axis.line = element_line(colour = 'black'),
+        legend.position = 'none',
+        legend.title = element_blank(),
+        legend.text = element_text(size = 10),
+        plot.title = element_text(size = 20)) + 
+  ylim(0.46, 0.65) + 
+  scale_color_manual(values = c('grey', 'pink', '#35b779', '#440154', '#fde725', 'grey')) + 
+  guides(size = "none") + 
+  ggtitle(expression(N[local]*m ~ '= 0.225, R = 0'))
+
+FST_mHigh_r_plot <- ggplot(data = m0.09_cM1_FST, aes(x = 500*t, y = FST)) + 
+  geom_point(aes(size = 1, color = 'Simulations')) + # Observed FST
+  geom_line(aes(x = 500*t, y = FST, size = 0.5, color = 'Simulations')) + # Observed FST
+  geom_errorbar(aes(ymin = FST-ci, ymax = FST+ci, color = 'Simulations')) + # Observed FST 95%CIs
+  #geom_point(aes(x = 500*t, y = zcFST, size = 1, color = 'B from Nordborg et al. (1996)')) + # Nordborg et al. (1996) FST
+  geom_point(aes(y = mFST, size = 1, color = "Simulations_model")) + # Mike B
+  #geom_point(aes(y = bkFST, size = 1, color = 'B from Buffalo and Kern (2024)')) +
+  theme_minimal() + xlab(expression(N[local]*t)) + ylab(expression(F[ST])) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title = element_text(size = 20),
+        axis.line = element_line(colour = 'black'),
+        legend.position = 'none',
+        legend.title = element_blank(),
+        legend.text = element_text(size = 10),
+        plot.title = element_text(size = 20)) + 
+  ylim(0, 0.01) + 
+  scale_color_manual(values = c('grey', 'pink', '#35b779', '#440154', '#fde725', 'grey')) + 
+  guides(size = "none") + 
+  ggtitle(expression(N[local]*m ~ '= 45, R = 0.01'))
+
+FST_mLow_r_plot <- ggplot(data = m0.00045_cM1_FST, aes(x = 500*t, y = FST)) + 
+  geom_point(aes(size = 1, color = 'Simulations')) + # Observed FST
+  geom_line(aes(x = 500*t, y = FST, size = 0.5, color = 'Simulations')) + # Observed FST
+  geom_errorbar(aes(ymin = FST-ci, ymax = FST+ci, color = 'Simulations')) + # Observed FST 95%CIs
+  #geom_point(aes(x = 500*t, y = zcFST, size = 1, color = 'B from Nordborg et al. (1996)')) + # Nordborg et al. (1996) FST
+  geom_point(aes(y = mFST, size = 1, color = "Simulations_model")) + # Mike B
+  #geom_point(aes(y = bkFST, size = 1, color = 'B from Buffalo and Kern (2024)')) +
+  theme_minimal() + xlab(expression(N[local]*t)) + ylab(expression(F[ST])) + 
+  theme(axis.text = element_text(size = 15), 
+        axis.title = element_text(size = 20),
+        axis.line = element_line(colour = 'black'),
+        legend.position = 'none',
+        legend.title = element_blank(),
+        legend.text = element_text(size = 10),
+        plot.title = element_text(size = 20)) + 
+  ylim(0.46, 0.65) + 
+  scale_color_manual(values = c('grey', 'pink', '#35b779', '#440154', '#fde725', 'grey')) + 
+  guides(size = "none") + 
+  ggtitle(expression(N[local]*m ~ '= 0.225, R = 0.01'))
+
+plot_grid(
+  FST_mLow_plot, FST_mHigh_plot, FST_mLow_r_plot, FST_mHigh_r_plot,
+  labels = "AUTO",
+  ncol = 2)
+```
+## Plots for manuscript
+
+```{r Plots for manuscript}
+
+# FST for 6 parameter sets (m = 0.00045 & M = 0, m = 0.009 & M = 0, m = 0.09 & M = 0, m = 0.00045 & M = 0.01, m = 0.009 & M = 0.01, m = 0.09 & M = 0.01)
+FST_plots <- plot_grid(
+  plot_mHigh, plot_mHigh_cM1,
+  plot_mInt, plot_mInt_cM1, 
+  plot_mLow, plot_mLow_cM1,
+  labels = "AUTO",
+  rel_heights = c(0.167, 0.167, 0.167, 0.167, 0.167, 0.167),
+  ncol = 2)
+
+FST_plots
+
+# m vs. s at Ne*s = 15
+plot_grid(
+  plot_m_s_plot, plot_m_s_M_plot,
+  labels = "AUTO"
+)
+
+# π_t for 6 parameter sets (m = 0.00045 & M = 0, m = 0.009 & M = 0, m = 0.09 & M = 0, m = 0.00045 & M = 0.01, m = 0.009 & M = 0.01, m = 0.09 & M = 0.01)
+pi_t_plots <- plot_grid(
+  m0.09_pi_t_plot, m0.09_cm1_pi_t_plot,
+  m0.009_pi_t_plot, m0.009_cm1_pi_t_plot,
+  m0.00045_pi_t_plot, m0.00045_cm1_pi_t_plot,
+  labels = "AUTO",
+  ncol = 2
+)
+
+pi_t_plots
+
+#π_s for 6 parameter sets (m = 0.00045 & M = 0, m = 0.009 & M = 0, m = 0.09 & M = 0, m = 0.00045 & M = 0.01, m = 0.009 & M = 0.01, m = 0.09 & M = 0.01)
+pi_s_plots <- plot_grid(
+  m0.09_pi_s_plot, m0.09_cm1_pi_s_plot,
+  m0.009_pi_s_plot, m0.009_cm1_pi_s_plot,
+  m0.00045_pi_s_plot, m0.00045_cm1_pi_s_plot,
+  labels = "AUTO",
+  ncol = 2
+)
+
+pi_s_plots
+
+```
+
+
+
